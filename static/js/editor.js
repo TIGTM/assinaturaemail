@@ -248,7 +248,7 @@ function applyPanel() {
   f.suffix     = document.getElementById("p-suffix").value;
   f.x          = parseInt(document.getElementById("p-x").value) || 0;
   f.y          = parseInt(document.getElementById("p-y").value) || 0;
-  f.font_file  = document.getElementById("p-font-file").value;
+  f.font_file  = document.getElementById("p-font-file").value.trim();
   renderAll();
 }
 

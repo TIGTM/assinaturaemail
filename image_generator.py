@@ -6,6 +6,7 @@ funcionário, e renderiza uma imagem PNG personalizada usando Pillow.
 import os
 import re
 from pathlib import Path
+from typing import Optional
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -21,6 +22,21 @@ FIELD_KEYS = {
     "extra1":     "extra1",
     "extra2":     "extra2",
 }
+
+# Fontes padrão por tipo de campo (alinhado ao editor visual)
+DEFAULT_FIELD_FONTS = {
+    "name":       "CYGroteskWide-Bold.ttf",
+    "title":      "Montserrat-Regular.ttf",
+    "phone":      "Montserrat-Regular.ttf",
+    "email":      "Montserrat-Regular.ttf",
+    "department": "Montserrat-Regular.ttf",
+    "website":    "Montserrat-Regular.ttf",
+    "instagram":  "Montserrat-Regular.ttf",
+    "extra1":     "Montserrat-Regular.ttf",
+    "extra2":     "Montserrat-Regular.ttf",
+}
+
+FONT_EXTENSIONS = {".ttf", ".otf", ".ttc"}
 
 # Fontes padrão bundled (fallback)
 SYSTEM_FONTS = [
@@ -74,28 +90,139 @@ class SignatureGenerator:
         self.output_dir      = output_dir
         self.font_dir        = font_dir
         self.target_width    = target_width  # Largura final da imagem em pixels
+        self._custom_fonts   = self._index_custom_fonts()
         Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    def _index_custom_fonts(self) -> dict:
+        """Indexa fontes customizadas por nome (case-insensitive)."""
+        indexed = {}
+        if not self.font_dir:
+            return indexed
+
+        font_root = Path(self.font_dir)
+        if not font_root.exists():
+            return indexed
+
+        for item in font_root.iterdir():
+            if not item.is_file():
+                continue
+            if item.suffix.lower() not in FONT_EXTENSIONS:
+                continue
+            indexed[item.name.lower()] = item
+        return indexed
+
+    @staticmethod
+    def _normalize_font_file(font_file: str) -> str:
+        """Normaliza o nome da fonte removendo aspas, espaços e caminho."""
+        if not font_file:
+            return ""
+        value = str(font_file).strip().strip('"').strip("'").replace("\\", "/")
+        if "/" in value:
+            value = value.split("/")[-1]
+        return value
+
+    @staticmethod
+    def _bold_variants(font_name: str) -> list:
+        """Gera nomes alternativos para tentar versão Bold da mesma fonte."""
+        name = SignatureGenerator._normalize_font_file(font_name)
+        if not name:
+            return []
+
+        stem = Path(name).stem
+        suffix = Path(name).suffix or ".ttf"
+        variants = []
+
+        replacements = [
+            ("-Regular", "-Bold"),
+            ("_Regular", "_Bold"),
+            (" Regular", " Bold"),
+            ("Regular", "Bold"),
+            ("-regular", "-bold"),
+            ("_regular", "_bold"),
+            (" regular", " bold"),
+            ("regular", "bold"),
+            ("-Light", "-Bold"),
+            ("-light", "-bold"),
+            ("-Medium", "-Bold"),
+            ("-medium", "-bold"),
+            ("-SemiBold", "-Bold"),
+            ("-semibold", "-bold"),
+        ]
+
+        for old, new in replacements:
+            if old in stem:
+                variants.append(stem.replace(old, new) + suffix)
+
+        if "bold" not in stem.lower():
+            variants.append(f"{stem}-Bold{suffix}")
+            variants.append(f"{stem}_Bold{suffix}")
+
+        deduped = []
+        seen = set()
+        for variant in variants:
+            key = variant.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(variant)
+        return deduped
+
+    def _find_custom_font(self, font_name: str) -> Optional[Path]:
+        """Busca fonte customizada por nome, ignorando maiúsculas/minúsculas."""
+        normalized = self._normalize_font_file(font_name)
+        if not normalized:
+            return None
+
+        exact = self._custom_fonts.get(normalized.lower())
+        if exact:
+            return exact
+
+        # Fallback por stem (aceita nome sem extensão ou extensão diferente)
+        expected_stem = Path(normalized).stem.lower()
+        for filename, path in self._custom_fonts.items():
+            if Path(filename).stem.lower() == expected_stem:
+                return path
+
+        return None
 
     def _get_font(self, field: dict) -> ImageFont.FreeTypeFont:
         """Carrega a fonte configurada para o campo, com fallback."""
-        size      = int(field.get("font_size", 14))
-        bold      = field.get("bold", False)
-        font_file = field.get("font_file", "")
+        size       = int(field.get("font_size", 14))
+        bold       = bool(field.get("bold", False))
+        field_type = field.get("field_type", "")
+        font_file  = self._normalize_font_file(field.get("font_file", ""))
 
         # 1. Fonte customizada na pasta fonts/
-        if font_file and self.font_dir:
-            # Se bold=True e o arquivo é Regular, tenta trocar para Bold automaticamente
-            if bold:
-                bold_file = (font_file
-                             .replace("-Regular", "-Bold")
-                             .replace("_Regular", "_Bold"))
-                bold_path = Path(self.font_dir) / bold_file
-                if bold_path.exists():
-                    font_file = bold_file
+        candidates = []
+        if font_file:
+            candidates.append(font_file)
 
-            custom = Path(self.font_dir) / font_file
-            if custom.exists():
+        default_font = DEFAULT_FIELD_FONTS.get(field_type, "")
+        if default_font and default_font not in candidates:
+            candidates.append(default_font)
+
+        resolved_candidates = []
+        for candidate in candidates:
+            if bold:
+                resolved_candidates.extend(self._bold_variants(candidate))
+            resolved_candidates.append(candidate)
+
+        seen = set()
+        for candidate in resolved_candidates:
+            key = candidate.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+
+            custom = self._find_custom_font(candidate)
+            if not custom:
+                continue
+
+            try:
                 return ImageFont.truetype(str(custom), size)
+            except OSError:
+                # Fonte corrompida/incompatível: tenta próximos candidatos.
+                continue
 
         # 2. Fonte do sistema
         sys_font = find_system_font(bold=bold)
