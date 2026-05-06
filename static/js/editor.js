@@ -55,9 +55,9 @@ const FIELD_BOLD = {
 };
 
 const PREVIEW_VALUES = {
-  name:       "Pablo Baldoni de Assis",
+  name:       "PABLO BALDONI DE ASSIS",
   title:      "Analista de compras",
-  phone:      "(31) 9.9982-9763",
+  phone:      "(31) 9 7217-5910",
   email:      "pablo@gtmalimentos.com.br",
   department: "Compras",
   website:    "www.gtmalimentos.com.br",

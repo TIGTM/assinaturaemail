@@ -9,7 +9,7 @@
     <div class="form-row">
       <div class="form-group">
         <label>Nome completo</label>
-        <input type="text" name="name" value="{{ emp.name or '' }}" required>
+        <input type="text" name="name" value="{{ emp.name or '' }}" required style="text-transform:uppercase;">
       </div>
       <div class="form-group">
         <label>Cargo</label>
@@ -23,7 +23,7 @@
       </div>
       <div class="form-group">
         <label>Telefone</label>
-        <input type="text" name="phone" value="{{ emp.phone or '' }}" placeholder="(31) 9.9999-9999">
+        <input type="text" name="phone" value="{{ emp.phone or '' }}" inputmode="numeric" maxlength="16" placeholder="(31) 9 7217-5910">
       </div>
     </div>
     <div class="form-row">
@@ -57,4 +57,8 @@
     </div>
   </form>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/employee_form.js"></script>
 {% endblock %}

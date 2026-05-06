@@ -5,8 +5,81 @@ Gerencia employees, layouts e configurações da aplicação.
 import sqlite3
 import json
 import os
+import re
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "data.db")
+
+
+def normalize_name(value: str) -> str:
+    """Normaliza nomes para caixa alta e espaço único."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return " ".join(text.split()).upper()
+
+
+def normalize_phone(value: str) -> str:
+    """Normaliza telefone para o padrão (31) 9 7217-5910 quando possível."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+
+    digits = re.sub(r"\D", "", text)
+    if not digits:
+        return ""
+
+    # Remove DDI (55) e prefixo 0 quando vierem do Azure/contatos externos.
+    if digits.startswith("55") and len(digits) > 11:
+        digits = digits[2:]
+    if digits.startswith("0") and len(digits) > 11:
+        digits = digits[1:]
+
+    if len(digits) >= 11:
+        digits = digits[:11]
+        return f"({digits[:2]}) {digits[2]} {digits[3:7]}-{digits[7:11]}"
+
+    if len(digits) == 10:
+        return f"({digits[:2]}) {digits[2:6]}-{digits[6:10]}"
+
+    if len(digits) <= 2:
+        return f"({digits}"
+
+    if len(digits) <= 6:
+        return f"({digits[:2]}) {digits[2:]}"
+
+    return f"({digits[:2]}) {digits[2:-4]}-{digits[-4:]}"
+
+
+def normalize_employee(data: dict) -> dict:
+    """Aplica normalizações de nome e telefone no dicionário do funcionário."""
+    normalized = dict(data)
+    normalized["name"] = normalize_name(normalized.get("name", ""))
+    normalized["phone"] = normalize_phone(normalized.get("phone", ""))
+    return normalized
+
+
+def normalize_existing_employees(conn):
+    """Atualiza registros antigos para manter padrão único no banco."""
+    cur = conn.cursor()
+    cur.execute("SELECT id, name, phone FROM employees")
+    updates = []
+    for row in cur.fetchall():
+        current_name = row["name"] or ""
+        current_phone = row["phone"] or ""
+        normalized_name = normalize_name(current_name)
+        normalized_phone = normalize_phone(current_phone)
+        if normalized_name != current_name or normalized_phone != current_phone:
+            updates.append((normalized_name, normalized_phone, row["id"]))
+
+    if updates:
+        cur.executemany(
+            """
+            UPDATE employees
+            SET name=?, phone=?, updated_at=datetime('now')
+            WHERE id=?
+            """,
+            updates,
+        )
 
 
 def get_db():
@@ -64,6 +137,8 @@ def init_db():
         );
     """)
 
+    normalize_existing_employees(conn)
+
     conn.commit()
     conn.close()
 
@@ -71,6 +146,7 @@ def init_db():
 # ─── Employees ────────────────────────────────────────────────────────────────
 
 def upsert_employee(data: dict):
+    normalized = normalize_employee(data)
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
@@ -89,9 +165,9 @@ def upsert_employee(data: dict):
     """, {
         "azure_id":   data.get("azure_id", ""),
         "email":      data["email"],
-        "name":       data.get("name", ""),
+        "name":       normalized.get("name", ""),
         "title":      data.get("title", ""),
-        "phone":      data.get("phone", ""),
+        "phone":      normalized.get("phone", ""),
         "department": data.get("department", ""),
         "website":    data.get("website", ""),
         "instagram":  data.get("instagram", ""),
@@ -107,7 +183,7 @@ def get_all_employees(active_only=True):
         cur.execute("SELECT * FROM employees WHERE active=1 ORDER BY name")
     else:
         cur.execute("SELECT * FROM employees ORDER BY name")
-    rows = [dict(r) for r in cur.fetchall()]
+    rows = [normalize_employee(dict(r)) for r in cur.fetchall()]
     conn.close()
     return rows
 
@@ -118,10 +194,11 @@ def get_employee(emp_id):
     cur.execute("SELECT * FROM employees WHERE id=?", (emp_id,))
     row = cur.fetchone()
     conn.close()
-    return dict(row) if row else None
+    return normalize_employee(dict(row)) if row else None
 
 
 def update_employee(emp_id, data: dict):
+    normalized = normalize_employee(data)
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
@@ -131,7 +208,7 @@ def update_employee(emp_id, data: dict):
             instagram=:instagram, extra1=:extra1, extra2=:extra2,
             updated_at=datetime('now')
         WHERE id=:id
-    """, {**data, "id": emp_id})
+    """, {**normalized, "id": emp_id})
     conn.commit()
     conn.close()
 
