@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — GTM Assinaturas{% endblock %}
+
+{% block content %}
+<h1 class="page-title">📊 Dashboard</h1>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="number">{{ stats.total }}</div>
+    <div class="label">Funcionários</div>
+  </div>
+  <div class="stat-card">
+    <div class="number">{{ stats.generated }}</div>
+    <div class="label">Imagens geradas</div>
+  </div>
+  <div class="stat-card">
+    <div class="number">{{ stats.deployed }}</div>
+    <div class="label">Assinaturas ativas</div>
+  </div>
+  <div class="stat-card">
+    <div class="number">{{ stats.layouts }}</div>
+    <div class="label">Layouts</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+  <!-- Layout ativo -->
+  <div class="card">
+    <div class="card-title">🖼️ Layout ativo</div>
+    {% if active_layout %}
+      <p style="margin-bottom:12px;color:var(--text2);font-size:13px;">
+        <strong style="color:var(--text)">{{ active_layout.name }}</strong> —
+        {{ active_layout.fields | length }} campos configurados
+      </p>
+      <img src="/static/uploads/{{ active_layout.base_image }}"
+           style="max-width:100%;border-radius:6px;border:1px solid var(--border);">
+      <div style="margin-top:12px;display:flex;gap:8px;">
+        <a href="/editor/{{ active_layout.id }}" class="btn btn-secondary btn-sm">✏️ Editar campos</a>
+        <a href="/generate" class="btn btn-primary btn-sm">⚙️ Gerar imagens</a>
+      </div>
+    {% else %}
+      <p style="color:var(--text2);font-size:14px;">
+        Nenhum layout ativo. <a href="/layouts/upload">Faça upload de uma imagem</a>.
+      </p>
+    {% endif %}
+  </div>
+
+  <!-- Log recente -->
+  <div class="card">
+    <div class="card-title">📋 Últimas operações</div>
+    {% if log %}
+      <table>
+        <thead><tr><th>Email</th><th>Status</th><th>Data</th></tr></thead>
+        <tbody>
+        {% for entry in log %}
+          <tr>
+            <td style="font-size:12px;">{{ entry.email }}</td>
+            <td>
+              {% if entry.status == 'ok' %}
+                <span class="badge badge-success">✓ OK</span>
+              {% else %}
+                <span class="badge badge-danger">✗ Erro</span>
+              {% endif %}
+            </td>
+            <td style="font-size:11px;color:var(--text2);">{{ entry.created_at[:16] }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p style="color:var(--text2);font-size:14px;">Nenhum deploy realizado ainda.</p>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Guia rápido -->
+<div class="card" style="margin-top:0;">
+  <div class="card-title">🚀 Próximos passos</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+    <a href="/layouts/upload" style="text-decoration:none;">
+      <div style="background:var(--sidebar);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center;">
+        <div style="font-size:28px;margin-bottom:8px;">1️⃣</div>
+        <strong style="font-size:13px;">Upload imagem</strong>
+        <p style="font-size:12px;color:var(--text2);margin-top:4px;">Envie a imagem base sem dados</p>
+      </div>
+    </a>
+    <a href="/layouts" style="text-decoration:none;">
+      <div style="background:var(--sidebar);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center;">
+        <div style="font-size:28px;margin-bottom:8px;">2️⃣</div>
+        <strong style="font-size:13px;">Posicionar campos</strong>
+        <p style="font-size:12px;color:var(--text2);margin-top:4px;">Arraste nome, cargo, telefone…</p>
+      </div>
+    </a>
+    <a href="/employees" style="text-decoration:none;">
+      <div style="background:var(--sidebar);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center;">
+        <div style="font-size:28px;margin-bottom:8px;">3️⃣</div>
+        <strong style="font-size:13px;">Sincronizar AD</strong>
+        <p style="font-size:12px;color:var(--text2);margin-top:4px;">Importar funcionários do Azure</p>
+      </div>
+    </a>
+    <a href="/deploy" style="text-decoration:none;">
+      <div style="background:var(--sidebar);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center;">
+        <div style="font-size:28px;margin-bottom:8px;">4️⃣</div>
+        <strong style="font-size:13px;">Deploy M365</strong>
+        <p style="font-size:12px;color:var(--text2);margin-top:4px;">Aplicar em todos os emails</p>
+      </div>
+    </a>
+  </div>
+</div>
+{% endblock %}

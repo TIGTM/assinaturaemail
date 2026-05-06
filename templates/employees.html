@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Funcionários{% endblock %}
+
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+  <h1 class="page-title" style="margin:0;">👥 Funcionários</h1>
+  <div style="display:flex;gap:8px;">
+    <a href="/employees/add" class="btn btn-secondary">+ Adicionar manual</a>
+    <form method="POST" action="/employees/sync" style="margin:0;">
+      <button type="submit" class="btn btn-primary">🔄 Sincronizar Azure AD</button>
+    </form>
+  </div>
+</div>
+
+{% if employees %}
+<div class="card" style="padding:0;overflow:auto;">
+  <table>
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>E-mail</th>
+        <th>Cargo</th>
+        <th>Telefone</th>
+        <th>Imagem</th>
+        <th>Deploy</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for emp in employees %}
+      <tr>
+        <td><strong style="font-size:13px;">{{ emp.name or '—' }}</strong></td>
+        <td style="font-size:12px;color:var(--text2);">{{ emp.email }}</td>
+        <td style="font-size:12px;">{{ emp.title or '—' }}</td>
+        <td style="font-size:12px;">{{ emp.phone or '—' }}</td>
+        <td>
+          {% if emp.img_path %}
+            <span class="badge badge-success">✓ Gerada</span>
+          {% else %}
+            <span class="badge badge-warning">Pendente</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if emp.sig_deployed %}
+            <span class="badge badge-success">✓ Ativo</span>
+          {% else %}
+            <span class="badge badge-info">Não enviado</span>
+          {% endif %}
+        </td>
+        <td>
+          <div style="display:flex;gap:6px;">
+            <a href="/employees/{{ emp.id }}/edit" class="btn btn-secondary btn-sm">✏️</a>
+            {% if emp.img_path %}
+            <a href="/api/preview/{{ emp.id }}" target="_blank" class="btn btn-secondary btn-sm">👁️</a>
+            {% endif %}
+            <button onclick="generateOne({{ emp.id }}, this)" class="btn btn-primary btn-sm">⚙️</button>
+          </div>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:48px;">
+  <div style="font-size:48px;margin-bottom:12px;">👥</div>
+  <p style="color:var(--text2);margin-bottom:16px;">
+    Nenhum funcionário cadastrado. Sincronize com o Azure AD ou adicione manualmente.
+  </p>
+  <form method="POST" action="/employees/sync" style="display:inline;">
+    <button type="submit" class="btn btn-primary">🔄 Sincronizar Azure AD agora</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function generateOne(empId, btn) {
+  btn.disabled = true;
+  btn.textContent = "…";
+  fetch(`/api/generate/${empId}`, { method: "POST" })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        showToast("Imagem gerada!", "success");
+        setTimeout(() => location.reload(), 800);
+      } else {
+        showToast("Erro: " + data.error, "error");
+        btn.disabled = false;
+        btn.textContent = "⚙️";
+      }
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Login — GTM Assinaturas</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-box">
+    <h1>✉️ GTM Assinaturas</h1>
+    <p>Gerador automático de assinaturas de email</p>
+
+    {% if error %}
+      <div class="flash flash-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST">
+      <div class="form-group">
+        <label>Senha de acesso</label>
+        <input type="password" name="password" autofocus placeholder="••••••••">
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" style="width:100%">Entrar</button>
+      </div>
+    </form>
+  </div>
+</div>
+</body>
+</html>

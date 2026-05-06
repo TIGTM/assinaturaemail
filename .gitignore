@@ -1,0 +1,49 @@
+# Variáveis de ambiente — nunca commitar
+.env
+.env.*
+!.env.example
+
+# Dependências
+node_modules/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Credenciais, chaves e tokens
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+.secrets/
+credentials.json
+service-account*.json
+cert/
+
+# Banco local
+data.db-journal
+
+# Artefatos gerados em runtime
+static/signatures/
+static/uploads/
+
+# Arquivos de contexto/memória (podem conter dados sensíveis)
+memory.md
+audit.log
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+
+# Backups
+*.bak
+*.zip

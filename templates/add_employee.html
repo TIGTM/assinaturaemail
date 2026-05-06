@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Adicionar funcionário{% endblock %}
+
+{% block content %}
+<h1 class="page-title">➕ Adicionar funcionário</h1>
+
+<div class="card" style="max-width:600px;">
+  <form method="POST">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Nome completo *</label>
+        <input type="text" name="name" required>
+      </div>
+      <div class="form-group">
+        <label>E-mail corporativo *</label>
+        <input type="email" name="email" required placeholder="nome@gtmalimentos.com.br">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Cargo</label>
+        <input type="text" name="title" placeholder="Analista de compras">
+      </div>
+      <div class="form-group">
+        <label>Telefone</label>
+        <input type="text" name="phone" placeholder="(31) 9.9999-9999">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Departamento</label>
+        <input type="text" name="department">
+      </div>
+      <div class="form-group">
+        <label>Website</label>
+        <input type="text" name="website" value="www.gtmalimentos.com.br">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Instagram</label>
+      <input type="text" name="instagram" placeholder="@gtmalimentos">
+    </div>
+
+    <div class="form-actions">
+      <a href="/employees" class="btn btn-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary">Adicionar funcionário</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

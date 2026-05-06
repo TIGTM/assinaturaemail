@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Layouts{% endblock %}
+
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+  <h1 class="page-title" style="margin:0;">🖼️ Layouts</h1>
+  <a href="/layouts/upload" class="btn btn-primary">+ Novo layout</a>
+</div>
+
+{% if layouts %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
+  {% for layout in layouts %}
+  <div class="card" style="padding:0;overflow:hidden;">
+    <img src="/static/uploads/{{ layout.base_image }}"
+         style="width:100%;display:block;border-bottom:1px solid var(--border);">
+    <div style="padding:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <strong style="font-size:14px;">{{ layout.name }}</strong>
+        {% if layout.is_active %}
+          <span class="badge badge-success">✓ Ativo</span>
+        {% endif %}
+      </div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">
+        {{ layout.fields_json | from_json | length }} campos · criado {{ layout.created_at[:10] }}
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="/editor/{{ layout.id }}" class="btn btn-secondary btn-sm">✏️ Editar</a>
+        {% if not layout.is_active %}
+        <form method="POST" action="/layouts/{{ layout.id }}/activate" style="margin:0;">
+          <button type="submit" class="btn btn-success btn-sm">✓ Ativar</button>
+        </form>
+        <form method="POST" action="/layouts/{{ layout.id }}/delete" style="margin:0;"
+              onsubmit="return confirm('Remover este layout?')">
+          <button type="submit" class="btn btn-danger btn-sm">🗑️</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:48px;">
+  <div style="font-size:48px;margin-bottom:12px;">🖼️</div>
+  <p style="color:var(--text2);margin-bottom:16px;">Nenhum layout criado ainda.</p>
+  <a href="/layouts/upload" class="btn btn-primary">Fazer upload da primeira imagem</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Filtro JSON para Jinja2 — registrado no app.py via template filter
+</script>
+{% endblock %}

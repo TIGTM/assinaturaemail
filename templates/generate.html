@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Gerar Imagens{% endblock %}
+
+{% block content %}
+<h1 class="page-title">⚙️ Gerar Imagens</h1>
+
+{% if not active_layout %}
+<div class="flash flash-error">
+  Nenhum layout ativo. <a href="/layouts">Ative um layout primeiro</a>.
+</div>
+{% else %}
+
+<div style="display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start;">
+
+  <div>
+    <!-- Layout ativo -->
+    <div class="card">
+      <div class="card-title">Layout ativo: <strong>{{ active_layout.name }}</strong></div>
+      <img src="/static/uploads/{{ active_layout.base_image }}"
+           style="max-width:100%;border-radius:6px;border:1px solid var(--border);margin-bottom:12px;">
+      <p style="font-size:13px;color:var(--text2);">
+        {{ active_layout.fields | length }} campos configurados
+        · <a href="/editor/{{ active_layout.id }}">Editar campos</a>
+      </p>
+    </div>
+
+    <!-- Tabela de funcionários -->
+    <form method="POST" id="gen-form">
+      <div class="card" style="padding:0;overflow:auto;">
+        <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+          <div class="check-all-row" style="margin:0;">
+            <input type="checkbox" id="check-all" onchange="toggleAll(this)">
+            <label for="check-all" style="margin:0;cursor:pointer;">Selecionar todos</label>
+          </div>
+          <span style="font-size:13px;color:var(--text2);">{{ employees|length }} funcionário(s)</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:36px;"></th>
+              <th>Nome</th>
+              <th>Cargo</th>
+              <th>E-mail</th>
+              <th>Status imagem</th>
+              <th>Preview</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for emp in employees %}
+            <tr>
+              <td><input type="checkbox" name="emp_ids" value="{{ emp.id }}" class="emp-check"></td>
+              <td><strong style="font-size:13px;">{{ emp.name or '—' }}</strong></td>
+              <td style="font-size:12px;color:var(--text2);">{{ emp.title or '—' }}</td>
+              <td style="font-size:12px;">{{ emp.email }}</td>
+              <td>
+                {% if emp.img_path %}
+                  <span class="badge badge-success">✓ Gerada</span>
+                {% else %}
+                  <span class="badge badge-warning">Pendente</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if emp.img_path %}
+                  <a href="/api/preview/{{ emp.id }}" target="_blank"
+                     class="btn btn-secondary btn-sm">👁️</a>
+                {% else %}
+                  <span style="color:var(--text2);font-size:12px;">—</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:10px;">
+        <button type="submit" class="btn btn-primary" id="btn-gen">
+          ⚙️ Gerar imagens selecionadas
+        </button>
+        <button type="button" class="btn btn-secondary" onclick="selectAll()">
+          Selecionar todos e gerar
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Resultados -->
+  <div>
+    {% if results %}
+    <div class="card">
+      <div class="card-title">📋 Resultado</div>
+      {% set ok_count = results | selectattr('ok') | list | length %}
+      <p style="font-size:13px;margin-bottom:12px;">
+        <strong style="color:var(--success);">{{ ok_count }}</strong> geradas com sucesso
+        {% if results|length - ok_count > 0 %}
+        · <strong style="color:var(--danger);">{{ results|length - ok_count }}</strong> com erro
+        {% endif %}
+      </p>
+      <div style="max-height:400px;overflow-y:auto;">
+        {% for r in results %}
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;
+                    border-bottom:1px solid var(--border);font-size:12px;">
+          {% if r.ok %}
+            <span style="color:var(--success);">✓</span>
+          {% else %}
+            <span style="color:var(--danger);">✗</span>
+          {% endif %}
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            {{ r.email }}
+          </span>
+          {% if not r.ok %}
+            <span style="color:var(--danger);font-size:11px;" title="{{ r.error }}">Erro</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <div style="margin-top:14px;">
+        <a href="/deploy" class="btn btn-success" style="width:100%;text-align:center;display:block;">
+          🚀 Ir para Deploy M365 →
+        </a>
+      </div>
+    </div>
+    {% else %}
+    <div class="card">
+      <div class="card-title">💡 Como funciona</div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;">
+        1. Selecione os funcionários<br>
+        2. Clique em <strong style="color:var(--text);">Gerar imagens</strong><br>
+        3. Cada funcionário recebe uma imagem PNG personalizada com seus dados<br>
+        4. As imagens ficam hospedadas na sua VPS<br>
+        5. Vá para <strong style="color:var(--text);">Deploy M365</strong> para ativar as assinaturas
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleAll(cb) {
+  document.querySelectorAll(".emp-check").forEach(c => c.checked = cb.checked);
+}
+function selectAll() {
+  document.querySelectorAll(".emp-check").forEach(c => c.checked = true);
+  document.getElementById("check-all").checked = true;
+  document.getElementById("gen-form").submit();
+}
+document.getElementById("gen-form")?.addEventListener("submit", () => {
+  const btn = document.getElementById("btn-gen");
+  btn.disabled = true;
+  btn.textContent = "⚙️ Gerando…";
+});
+</script>
+{% endblock %}

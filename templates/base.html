@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}GTM Signature App{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-logo">✉️ <span>GTM</span> Assinaturas</div>
+  <nav>
+    <a href="/"          class="nav-item {% if request.path == '/' %}active{% endif %}">
+      <span class="icon">📊</span> Dashboard
+    </a>
+    <a href="/layouts"   class="nav-item {% if '/layout' in request.path %}active{% endif %}">
+      <span class="icon">🖼️</span> Layouts
+    </a>
+    <a href="/employees" class="nav-item {% if '/employee' in request.path %}active{% endif %}">
+      <span class="icon">👥</span> Funcionários
+    </a>
+    <a href="/generate"  class="nav-item {% if '/generate' in request.path %}active{% endif %}">
+      <span class="icon">⚙️</span> Gerar imagens
+    </a>
+    <a href="/deploy"    class="nav-item {% if '/deploy' in request.path %}active{% endif %}">
+      <span class="icon">🚀</span> Deploy M365
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <a href="/logout">Sair</a>
+  </div>
+</aside>
+
+<main class="main">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</main>
+
+<div class="toast" id="toast"></div>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>
