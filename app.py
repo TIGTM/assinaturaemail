@@ -341,13 +341,20 @@ def _build_signature_html(emp, img_url):
     """Gera o HTML da assinatura com a imagem hospedada na VPS."""
     email = emp.get("email", "")
     # width="600" como atributo HTML é essencial para o Outlook respeitar o tamanho
-    return f"""<div style="font-family:Arial,sans-serif;font-size:0;line-height:0;">
-  <a href="mailto:{email}" style="border:none;text-decoration:none;">
-    <img src="{img_url}" alt="Assinatura {emp.get('name','')}"
-         width="600"
-         style="width:600px;max-width:100%;border:none;display:block;" />
-  </a>
-</div>"""
+    return f"""<!-- GTM_SIGNATURE_START -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"
+       style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+    <tr>
+        <td style="padding:10px 0 2px 0;">
+            <a href="mailto:{email}" style="border:none;text-decoration:none;">
+                <img src="{img_url}" alt="Assinatura {emp.get('name','')}"
+                     width="600"
+                     style="display:block;width:600px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;" />
+            </a>
+        </td>
+    </tr>
+</table>
+<!-- GTM_SIGNATURE_END -->"""
 
 
 # ─── Servir fontes customizadas ───────────────────────────────────────────────

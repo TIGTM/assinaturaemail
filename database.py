@@ -7,7 +7,16 @@ import json
 import os
 import re
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "data.db")
+
+def get_db_path() -> str:
+    """Resolve o caminho do banco SQLite e garante que o diretório exista."""
+    default_path = os.path.join(os.path.dirname(__file__), "data.db")
+    raw_path = os.getenv("DB_PATH", default_path)
+    db_path = os.path.abspath(os.path.expanduser(raw_path))
+    db_dir = os.path.dirname(db_path)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
+    return db_path
 
 
 def normalize_name(value: str) -> str:
@@ -83,7 +92,7 @@ def normalize_existing_employees(conn):
 
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -150,8 +159,14 @@ def upsert_employee(data: dict):
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO employees (azure_id, email, name, title, phone, department, website, instagram)
-        VALUES (:azure_id, :email, :name, :title, :phone, :department, :website, :instagram)
+        INSERT INTO employees (
+            azure_id, email, name, title, phone,
+            department, website, instagram, extra1, extra2
+        )
+        VALUES (
+            :azure_id, :email, :name, :title, :phone,
+            :department, :website, :instagram, :extra1, :extra2
+        )
         ON CONFLICT(email) DO UPDATE SET
             azure_id    = excluded.azure_id,
             name        = excluded.name,
@@ -160,6 +175,8 @@ def upsert_employee(data: dict):
             department  = excluded.department,
             website     = excluded.website,
             instagram   = excluded.instagram,
+            extra1      = COALESCE(NULLIF(excluded.extra1, ''), employees.extra1),
+            extra2      = COALESCE(NULLIF(excluded.extra2, ''), employees.extra2),
             active      = 1,
             updated_at  = datetime('now')
     """, {
@@ -171,6 +188,8 @@ def upsert_employee(data: dict):
         "department": data.get("department", ""),
         "website":    data.get("website", ""),
         "instagram":  data.get("instagram", ""),
+        "extra1":     data.get("extra1", ""),
+        "extra2":     data.get("extra2", ""),
     })
     conn.commit()
     conn.close()

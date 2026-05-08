@@ -26,6 +26,8 @@ service-account*.json
 cert/
 
 # Banco local
+data.db
+data.db-*
 data.db-journal
 
 # Artefatos gerados em runtime

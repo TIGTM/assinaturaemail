@@ -69,7 +69,7 @@ class GraphClient:
         fields = ",".join([
             "id", "displayName", "mail", "userPrincipalName",
             "jobTitle", "mobilePhone", "businessPhones",
-            "department", "officeLocation", "accountEnabled",
+            "department", "officeLocation", "companyName", "accountEnabled",
         ])
 
         # Suporta múltiplos domínios separados por vírgula
@@ -101,6 +101,7 @@ class GraphClient:
 
                 phone = (u.get("mobilePhone") or
                          (u.get("businessPhones") or [""])[0] or "")
+                company_name = (u.get("companyName") or "").strip()
 
                 results.append({
                     "azure_id":   u.get("id", ""),
@@ -111,6 +112,7 @@ class GraphClient:
                     "department": u.get("department", ""),
                     "website":    os.getenv("VPS_BASE_URL", "").replace("assinaturas.", "www."),
                     "instagram":  "",
+                    "extra2":     company_name,
                 })
 
             # Paginação

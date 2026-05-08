@@ -35,6 +35,7 @@ class SignatureDeployer:
         self.organization  = os.getenv("EXCHANGE_ORGANIZATION")
         self.cert_path     = os.getenv("EXCHANGE_CERT_PATH", "")      # .pfx opcional
         self.cert_password = os.getenv("EXCHANGE_CERT_PASSWORD", "")  # senha do .pfx
+        self.signature_name = os.getenv("EXCHANGE_SIGNATURE_NAME", "GTM Assinatura")
         self._ps_available = self._check_powershell()
 
     # ─── Verificações ─────────────────────────────────────────────────────────
@@ -73,8 +74,9 @@ class SignatureDeployer:
         if not ok:
             return False, msg
 
-        # Escapa aspas simples no HTML para uso no PowerShell
+        # Escapa aspas simples para uso em strings single-quoted no PowerShell.
         safe_html = signature_html.replace("'", "''")
+        safe_signature_name = self.signature_name.replace("'", "''")
 
         # Constrói script PowerShell
         if self.cert_path and Path(self.cert_path).exists():
@@ -100,11 +102,32 @@ class SignatureDeployer:
             $ErrorActionPreference = 'Stop'
             try {{
                 {connect_cmd}
-                Set-MailboxMessageConfiguration `
-                    -Identity '{email}' `
-                    -SignatureHtml '{safe_html}' `
-                    -AutoAddSignature $true `
-                    -AutoAddSignatureOnReply $true
+                $signatureName = '{safe_signature_name}'
+                $signatureHtml = '{safe_html}'
+
+                try {{
+                    # Exchange Online com roaming signatures (new Outlook/OWA).
+                    Set-MailboxMessageConfiguration `
+                        -Identity '{email}' `
+                        -SignatureName $signatureName `
+                        -SignatureHtmlBody $signatureHtml `
+                        -DefaultSignature $signatureName `
+                        -DefaultSignatureOnReply $signatureName `
+                        -DefaultFormat Html `
+                        -AutoAddSignature $true `
+                        -AutoAddSignatureOnReply $true `
+                        -ErrorAction Stop
+                }} catch {{
+                    # Fallback legado para tenants/cmdlets sem parâmetros de roaming.
+                    Set-MailboxMessageConfiguration `
+                        -Identity '{email}' `
+                        -SignatureHtml $signatureHtml `
+                        -DefaultFormat Html `
+                        -AutoAddSignature $true `
+                        -AutoAddSignatureOnReply $true `
+                        -ErrorAction Stop
+                }}
+
                 Disconnect-ExchangeOnline -Confirm:$false
                 Write-Output "SUCCESS"
             }} catch {{
@@ -155,20 +178,41 @@ class SignatureDeployer:
             """)
 
         results_path = json_path.replace(".json", "_results.json")
+        safe_signature_name = self.signature_name.replace("'", "''")
 
         script = textwrap.dedent(f"""
             $ErrorActionPreference = 'Continue'
             {connect_cmd}
+            $signatureName = '{safe_signature_name}'
             $items   = Get-Content '{json_path}' | ConvertFrom-Json
             $results = @()
             foreach ($item in $items) {{
                 try {{
-                    $safeHtml = $item.html -replace "'", "''"
-                    Set-MailboxMessageConfiguration `
-                        -Identity $item.email `
-                        -SignatureHtml $item.html `
-                        -AutoAddSignature $true `
-                        -AutoAddSignatureOnReply $true
+                    $signatureHtml = [string]$item.html
+
+                    try {{
+                        # Exchange Online com roaming signatures (new Outlook/OWA).
+                        Set-MailboxMessageConfiguration `
+                            -Identity $item.email `
+                            -SignatureName $signatureName `
+                            -SignatureHtmlBody $signatureHtml `
+                            -DefaultSignature $signatureName `
+                            -DefaultSignatureOnReply $signatureName `
+                            -DefaultFormat Html `
+                            -AutoAddSignature $true `
+                            -AutoAddSignatureOnReply $true `
+                            -ErrorAction Stop
+                    }} catch {{
+                        # Fallback legado para tenants/cmdlets sem parâmetros de roaming.
+                        Set-MailboxMessageConfiguration `
+                            -Identity $item.email `
+                            -SignatureHtml $signatureHtml `
+                            -DefaultFormat Html `
+                            -AutoAddSignature $true `
+                            -AutoAddSignatureOnReply $true `
+                            -ErrorAction Stop
+                    }}
+
                     $results += [PSCustomObject]@{{ email=$item.email; ok=$true; msg="OK" }}
                 }} catch {{
                     $results += [PSCustomObject]@{{ email=$item.email; ok=$false; msg=$_.Exception.Message }}
@@ -217,7 +261,7 @@ class SignatureDeployer:
                 ["pwsh", "-NonInteractive", "-File", script_path],
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=600,
             )
             if result.returncode == 0:
                 return True, result.stdout.strip()
@@ -225,7 +269,7 @@ class SignatureDeployer:
                 err = result.stderr.strip() or result.stdout.strip()
                 return False, err
         except subprocess.TimeoutExpired:
-            return False, "Timeout ao executar PowerShell (>120s)"
+            return False, "Timeout ao executar PowerShell (>600s)"
         except FileNotFoundError:
             return False, "pwsh não encontrado. Instale o PowerShell Core."
         finally:
