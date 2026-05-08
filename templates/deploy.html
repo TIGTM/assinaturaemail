@@ -103,8 +103,8 @@
             <span>{{ r.email }}</span>
           </div>
           {% if not r.ok and r.error %}
-            <div style="color:var(--danger);font-size:11px;margin-top:3px;padding-left:18px;">
-              {{ r.error[:120] }}
+            <div style="color:var(--danger);font-size:11px;margin-top:3px;padding-left:18px;white-space:pre-wrap;word-break:break-word;">
+              {{ r.error }}
             </div>
           {% endif %}
         </div>

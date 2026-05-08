@@ -15,6 +15,7 @@ Autenticação usada: App-Only (Certificate)
 """
 import os
 import json
+import re
 import subprocess
 import tempfile
 import textwrap
@@ -37,6 +38,39 @@ class SignatureDeployer:
         self.cert_password = os.getenv("EXCHANGE_CERT_PASSWORD", "")  # senha do .pfx
         self.signature_name = os.getenv("EXCHANGE_SIGNATURE_NAME", "GTM Assinatura")
         self._ps_available = self._check_powershell()
+
+    ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+
+    @classmethod
+    def _sanitize_powershell_output(cls, text: str) -> str:
+        """Remove códigos ANSI e ruído comum do output do PowerShell."""
+        if not text:
+            return ""
+
+        cleaned = cls.ANSI_ESCAPE_RE.sub("", text).replace("\r", "")
+        lines = [ln.strip() for ln in cleaned.splitlines() if ln.strip()]
+
+        filtered = []
+        for ln in lines:
+            # Mantém apenas mensagens úteis para o usuário.
+            if re.match(r"^/tmp/.*\.ps1:\d+", ln):
+                continue
+            if re.match(r"^Line\s+\|", ln):
+                continue
+            if re.match(r"^\d+\s+\|", ln):
+                continue
+            if ln.startswith("+ CategoryInfo"):
+                continue
+            if ln.startswith("+ FullyQualifiedErrorId"):
+                continue
+            if ln == "Write-Error:":
+                continue
+            filtered.append(ln)
+
+        merged = " | ".join(filtered).strip()
+        if "ERROR::" in merged:
+            merged = merged.split("ERROR::", 1)[1].strip()
+        return merged or "Falha ao executar comando do Exchange Online."
 
     # ─── Verificações ─────────────────────────────────────────────────────────
 
@@ -100,6 +134,10 @@ class SignatureDeployer:
 
         script = textwrap.dedent(f"""
             $ErrorActionPreference = 'Stop'
+            $ProgressPreference = 'SilentlyContinue'
+            if ($PSVersionTable.PSVersion.Major -ge 7) {{
+                $PSStyle.OutputRendering = 'PlainText'
+            }}
             try {{
                 {connect_cmd}
                 $signatureName = '{safe_signature_name}'
@@ -118,20 +156,26 @@ class SignatureDeployer:
                         -AutoAddSignatureOnReply $true `
                         -ErrorAction Stop
                 }} catch {{
+                    $roamingErr = $_.Exception.Message
                     # Fallback legado para tenants/cmdlets sem parâmetros de roaming.
-                    Set-MailboxMessageConfiguration `
-                        -Identity '{email}' `
-                        -SignatureHtml $signatureHtml `
-                        -DefaultFormat Html `
-                        -AutoAddSignature $true `
-                        -AutoAddSignatureOnReply $true `
-                        -ErrorAction Stop
+                    try {{
+                        Set-MailboxMessageConfiguration `
+                            -Identity '{email}' `
+                            -SignatureHtml $signatureHtml `
+                            -DefaultFormat Html `
+                            -AutoAddSignature $true `
+                            -AutoAddSignatureOnReply $true `
+                            -ErrorAction Stop
+                    }} catch {{
+                        $legacyErr = $_.Exception.Message
+                        throw "Falha nos dois modos. Roaming: $roamingErr | Legado: $legacyErr"
+                    }}
                 }}
 
                 Disconnect-ExchangeOnline -Confirm:$false
                 Write-Output "SUCCESS"
             }} catch {{
-                Write-Error $_.Exception.Message
+                Write-Output ("ERROR::" + $_.Exception.Message)
                 exit 1
             }}
         """)
@@ -182,6 +226,10 @@ class SignatureDeployer:
 
         script = textwrap.dedent(f"""
             $ErrorActionPreference = 'Continue'
+            $ProgressPreference = 'SilentlyContinue'
+            if ($PSVersionTable.PSVersion.Major -ge 7) {{
+                $PSStyle.OutputRendering = 'PlainText'
+            }}
             {connect_cmd}
             $signatureName = '{safe_signature_name}'
             $items   = Get-Content '{json_path}' | ConvertFrom-Json
@@ -203,14 +251,20 @@ class SignatureDeployer:
                             -AutoAddSignatureOnReply $true `
                             -ErrorAction Stop
                     }} catch {{
+                        $roamingErr = $_.Exception.Message
                         # Fallback legado para tenants/cmdlets sem parâmetros de roaming.
-                        Set-MailboxMessageConfiguration `
-                            -Identity $item.email `
-                            -SignatureHtml $signatureHtml `
-                            -DefaultFormat Html `
-                            -AutoAddSignature $true `
-                            -AutoAddSignatureOnReply $true `
-                            -ErrorAction Stop
+                        try {{
+                            Set-MailboxMessageConfiguration `
+                                -Identity $item.email `
+                                -SignatureHtml $signatureHtml `
+                                -DefaultFormat Html `
+                                -AutoAddSignature $true `
+                                -AutoAddSignatureOnReply $true `
+                                -ErrorAction Stop
+                        }} catch {{
+                            $legacyErr = $_.Exception.Message
+                            throw "Falha nos dois modos. Roaming: $roamingErr | Legado: $legacyErr"
+                        }}
                     }}
 
                     $results += [PSCustomObject]@{{ email=$item.email; ok=$true; msg="OK" }}
@@ -258,16 +312,16 @@ class SignatureDeployer:
 
         try:
             result = subprocess.run(
-                ["pwsh", "-NonInteractive", "-File", script_path],
+                ["pwsh", "-NoProfile", "-NonInteractive", "-File", script_path],
                 capture_output=True,
                 text=True,
                 timeout=600,
             )
             if result.returncode == 0:
-                return True, result.stdout.strip()
+                return True, self._sanitize_powershell_output(result.stdout)
             else:
                 err = result.stderr.strip() or result.stdout.strip()
-                return False, err
+                return False, self._sanitize_powershell_output(err)
         except subprocess.TimeoutExpired:
             return False, "Timeout ao executar PowerShell (>600s)"
         except FileNotFoundError:
@@ -307,13 +361,17 @@ class SignatureDeployer:
 
         script = textwrap.dedent(f"""
             $ErrorActionPreference = 'Stop'
+            $ProgressPreference = 'SilentlyContinue'
+            if ($PSVersionTable.PSVersion.Major -ge 7) {{
+                $PSStyle.OutputRendering = 'PlainText'
+            }}
             try {{
                 {connect_cmd}
                 $org = Get-OrganizationConfig | Select-Object -ExpandProperty DisplayName
                 Disconnect-ExchangeOnline -Confirm:$false
                 Write-Output "Conectado: $org"
             }} catch {{
-                Write-Error $_.Exception.Message
+                Write-Output ("ERROR::" + $_.Exception.Message)
                 exit 1
             }}
         """)
