@@ -31,9 +31,9 @@ class SignatureDeployer:
     """
 
     def __init__(self):
-        self.app_id        = os.getenv("EXCHANGE_APP_ID")
-        self.cert_thumb    = os.getenv("EXCHANGE_CERT_THUMBPRINT")
-        self.organization  = os.getenv("EXCHANGE_ORGANIZATION")
+        self.app_id        = os.getenv("EXCHANGE_APP_ID", "")
+        self.cert_thumb    = os.getenv("EXCHANGE_CERT_THUMBPRINT", "")
+        self.organization  = os.getenv("EXCHANGE_ORGANIZATION", "")
         self.cert_path     = os.getenv("EXCHANGE_CERT_PATH", "")      # .pfx opcional
         self.cert_password = os.getenv("EXCHANGE_CERT_PASSWORD", "")  # senha do .pfx
         self.signature_name = os.getenv("EXCHANGE_SIGNATURE_NAME", "GTM Assinatura")
@@ -93,9 +93,49 @@ class SignatureDeployer:
             return False, "EXCHANGE_APP_ID não configurado no .env"
         if not self.cert_thumb and not self.cert_path:
             return False, "Configure EXCHANGE_CERT_THUMBPRINT ou EXCHANGE_CERT_PATH no .env"
+        if self.cert_path and not Path(self.cert_path).exists():
+            return False, f"EXCHANGE_CERT_PATH não encontrado: {self.cert_path}"
         if not self.organization:
             return False, "EXCHANGE_ORGANIZATION não configurado no .env"
         return True, "OK"
+
+    def _build_connect_command(self) -> str:
+        """Monta o comando de conexão CBA no Exchange com fallback seguro."""
+        app_id = (self.app_id or "").replace("'", "''")
+        cert_thumb = (self.cert_thumb or "").replace("'", "''")
+        organization = (self.organization or "").replace("'", "''")
+        cert_path = (self.cert_path or "").replace("'", "''")
+        cert_password = (self.cert_password or "").replace("'", "''")
+
+        return textwrap.dedent(f"""
+            $exoCmd = Get-Command Connect-ExchangeOnline -ErrorAction Stop
+            $hasThumbprint = $exoCmd.Parameters.ContainsKey('CertificateThumbprint')
+            $hasCertFile   = $exoCmd.Parameters.ContainsKey('CertificateFilePath')
+            $certPath      = '{cert_path}'
+            $thumbprint    = '{cert_thumb}'
+
+            if ($certPath -and (Test-Path $certPath) -and $hasCertFile) {{
+                $SecurePass = ConvertTo-SecureString '{cert_password}' -AsPlainText -Force
+                Connect-ExchangeOnline `
+                    -AppId '{app_id}' `
+                    -CertificateFilePath $certPath `
+                    -CertificatePassword $SecurePass `
+                    -Organization '{organization}' `
+                    -ShowBanner:$false
+            }} elseif ($thumbprint -and $hasThumbprint) {{
+                Connect-ExchangeOnline `
+                    -AppId '{app_id}' `
+                    -CertificateThumbprint $thumbprint `
+                    -Organization '{organization}' `
+                    -ShowBanner:$false
+            }} elseif ($certPath -and -not (Test-Path $certPath)) {{
+                throw "EXCHANGE_CERT_PATH não encontrado: $certPath"
+            }} elseif ($thumbprint -and -not $hasThumbprint) {{
+                throw "Seu módulo ExchangeOnlineManagement não suporta -CertificateThumbprint neste ambiente. Configure EXCHANGE_CERT_PATH e EXCHANGE_CERT_PASSWORD no .env."
+            }} else {{
+                throw "Nenhum método de certificado válido encontrado. Configure EXCHANGE_CERT_PATH+EXCHANGE_CERT_PASSWORD ou EXCHANGE_CERT_THUMBPRINT no .env."
+            }}
+        """)
 
     # ─── Deploy individual ────────────────────────────────────────────────────
 
@@ -113,24 +153,7 @@ class SignatureDeployer:
         safe_signature_name = self.signature_name.replace("'", "''")
 
         # Constrói script PowerShell
-        if self.cert_path and Path(self.cert_path).exists():
-            connect_cmd = textwrap.dedent(f"""
-                $SecurePass = ConvertTo-SecureString '{self.cert_password}' -AsPlainText -Force
-                Connect-ExchangeOnline `
-                    -AppId '{self.app_id}' `
-                    -CertificateFilePath '{self.cert_path}' `
-                    -CertificatePassword $SecurePass `
-                    -Organization '{self.organization}' `
-                    -ShowBanner:$false
-            """)
-        else:
-            connect_cmd = textwrap.dedent(f"""
-                Connect-ExchangeOnline `
-                    -AppId '{self.app_id}' `
-                    -CertificateThumbprint '{self.cert_thumb}' `
-                    -Organization '{self.organization}' `
-                    -ShowBanner:$false
-            """)
+        connect_cmd = self._build_connect_command()
 
         script = textwrap.dedent(f"""
             $ErrorActionPreference = 'Stop'
@@ -202,24 +225,7 @@ class SignatureDeployer:
             json.dump(items, f, ensure_ascii=False)
             json_path = f.name
 
-        if self.cert_path and Path(self.cert_path).exists():
-            connect_cmd = textwrap.dedent(f"""
-                $SecurePass = ConvertTo-SecureString '{self.cert_password}' -AsPlainText -Force
-                Connect-ExchangeOnline `
-                    -AppId '{self.app_id}' `
-                    -CertificateFilePath '{self.cert_path}' `
-                    -CertificatePassword $SecurePass `
-                    -Organization '{self.organization}' `
-                    -ShowBanner:$false
-            """)
-        else:
-            connect_cmd = textwrap.dedent(f"""
-                Connect-ExchangeOnline `
-                    -AppId '{self.app_id}' `
-                    -CertificateThumbprint '{self.cert_thumb}' `
-                    -Organization '{self.organization}' `
-                    -ShowBanner:$false
-            """)
+        connect_cmd = self._build_connect_command()
 
         results_path = json_path.replace(".json", "_results.json")
         safe_signature_name = self.signature_name.replace("'", "''")
@@ -340,24 +346,7 @@ class SignatureDeployer:
         if not ok:
             return False, msg
 
-        if self.cert_path and Path(self.cert_path).exists():
-            connect_cmd = textwrap.dedent(f"""
-                $SecurePass = ConvertTo-SecureString '{self.cert_password}' -AsPlainText -Force
-                Connect-ExchangeOnline `
-                    -AppId '{self.app_id}' `
-                    -CertificateFilePath '{self.cert_path}' `
-                    -CertificatePassword $SecurePass `
-                    -Organization '{self.organization}' `
-                    -ShowBanner:$false
-            """)
-        else:
-            connect_cmd = textwrap.dedent(f"""
-                Connect-ExchangeOnline `
-                    -AppId '{self.app_id}' `
-                    -CertificateThumbprint '{self.cert_thumb}' `
-                    -Organization '{self.organization}' `
-                    -ShowBanner:$false
-            """)
+        connect_cmd = self._build_connect_command()
 
         script = textwrap.dedent(f"""
             $ErrorActionPreference = 'Stop'
