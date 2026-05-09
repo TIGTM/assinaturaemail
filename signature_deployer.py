@@ -561,6 +561,77 @@ class SignatureDeployer:
         """)
         return self._run_ps(script)
 
+    def clear_mailbox_signatures_batch(self, emails: list[str]) -> list[dict]:
+        """Limpa configuração de assinatura de múltiplos usuários em UMA sessão.
+
+        Não é comando global destrutivo: zera apenas os campos de assinatura
+        do MailboxMessageConfiguration de cada usuário individualmente, dentro
+        de um foreach. Reversível (basta rodar deploy mailbox novamente).
+        """
+        ok, msg = self.is_configured()
+        if not ok:
+            return [{"email": e, "ok": False, "msg": msg} for e in emails]
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json",
+                                        delete=False, encoding="utf-8") as f:
+            json.dump(emails, f, ensure_ascii=False)
+            json_path = f.name
+
+        results_path = json_path.replace(".json", "_results.json")
+        connect_cmd = self._build_connect_command()
+
+        script = textwrap.dedent(f"""
+            $ErrorActionPreference = 'Continue'
+            $ProgressPreference = 'SilentlyContinue'
+            if ($PSVersionTable.PSVersion.Major -ge 7) {{
+                $PSStyle.OutputRendering = 'PlainText'
+            }}
+            {connect_cmd}
+            $emails  = Get-Content '{json_path}' | ConvertFrom-Json
+            $results = @()
+            foreach ($email in $emails) {{
+                try {{
+                    Set-MailboxMessageConfiguration -Identity $email `
+                        -SignatureHtmlBody '' `
+                        -SignatureHtml '' `
+                        -SignatureText '' `
+                        -AutoAddSignature $false `
+                        -AutoAddSignatureOnReply $false `
+                        -ErrorAction Stop
+                    $results += [PSCustomObject]@{{ email=$email; ok=$true; msg='OK' }}
+                }} catch {{
+                    $results += [PSCustomObject]@{{ email=$email; ok=$false; msg=$_.Exception.Message }}
+                }}
+            }}
+            Disconnect-ExchangeOnline -Confirm:$false
+            $results | ConvertTo-Json -Depth 3 | Out-File '{results_path}' -Encoding utf8
+        """)
+
+        self._run_ps(script)
+
+        results = []
+        try:
+            with open(results_path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            if isinstance(raw, dict):
+                raw = [raw]
+            for r in raw:
+                results.append({
+                    "email": r.get("email", ""),
+                    "ok":    bool(r.get("ok", False)),
+                    "msg":   r.get("msg", ""),
+                })
+        except Exception as e:
+            results = [{"email": em, "ok": False, "msg": str(e)} for em in emails]
+        finally:
+            for p in [json_path, results_path]:
+                try:
+                    os.unlink(p)
+                except Exception:
+                    pass
+
+        return results
+
     @staticmethod
     def install_module_script() -> str:
         """Retorna o script PowerShell para instalar o módulo ExchangeOnlineManagement."""

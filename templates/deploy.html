@@ -19,6 +19,10 @@
             onsubmit="return confirm('Aplicar a regra única de transporte agora? Isso afeta TODOS os envios dos domínios @gtmalimentos.com.br e @pescadosbemfresco.com.br.');">
         <button type="submit" class="btn btn-success">✓ Aplicar regra única</button>
       </form>
+      <form method="POST" action="{{ url_for('clear_mailbox_all') }}" style="margin:0;"
+            onsubmit="return confirm('Limpar a configuração de assinatura mailbox de TODOS os funcionários?\n\nIsso desativa AutoAddSignature e zera SignatureHtmlBody/Html/Text de cada usuário individualmente. Necessário quando há resíduo do modo antigo causando duplicação (cliente adiciona uma assinatura E a regra adiciona outra).\n\nReversível: rodar deploy mailbox depois traz tudo de volta.');">
+        <button type="submit" class="btn btn-secondary">🧹 Limpar todas mailboxes</button>
+      </form>
       <form method="POST" action="{{ url_for('remove_transport_rule') }}" style="margin:0;"
             onsubmit="return confirm('Remover a regra de transporte? Os usuários voltam a depender da configuração de mailbox.');">
         <button type="submit" class="btn btn-secondary" style="background:var(--danger);color:#fff;">Remover regra</button>

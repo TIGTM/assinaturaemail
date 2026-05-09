@@ -369,6 +369,29 @@ def remove_transport_rule():
     return redirect(url_for("deploy"))
 
 
+@app.route("/deploy/clear-mailbox-all", methods=["POST"])
+@login_required
+def clear_mailbox_all():
+    """Limpa em sessão única a configuração de assinatura de TODAS as mailboxes
+    sincronizadas. Necessário quando os usuários têm assinatura mailbox legada
+    conflitando com a Transport Rule (resultado: 2 assinaturas no envio)."""
+    emps = db.get_all_employees()
+    emails = [e["email"] for e in emps if e.get("email")]
+    if not emails:
+        flash("Nenhum funcionário com email cadastrado.", "error")
+        return redirect(url_for("deploy"))
+    deployer = SignatureDeployer()
+    results = deployer.clear_mailbox_signatures_batch(emails)
+    ok_count = sum(1 for r in results if r["ok"])
+    for r in results:
+        emp_id = next((e["id"] for e in emps if e["email"] == r["email"]), None)
+        db.log_deploy(emp_id, r["email"], "ok" if r["ok"] else "error",
+                      "CLEAR_MAILBOX_BATCH: " + r.get("msg", ""))
+    flash(f"{ok_count}/{len(results)} mailboxes limpas.",
+          "success" if ok_count == len(results) else "info")
+    return redirect(url_for("deploy"))
+
+
 @app.route("/deploy/clear-mailbox/<int:emp_id>", methods=["POST"])
 @login_required
 def clear_mailbox_signature(emp_id):
