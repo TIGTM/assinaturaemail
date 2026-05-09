@@ -172,6 +172,8 @@ class SignatureDeployer:
                         -Identity '{email}' `
                         -SignatureName $signatureName `
                         -SignatureHtmlBody $signatureHtml `
+                        -SignatureHtml $signatureHtml `
+                        -SignatureText '' `
                         -DefaultSignature $signatureName `
                         -DefaultSignatureOnReply $signatureName `
                         -DefaultFormat Html `
@@ -185,6 +187,7 @@ class SignatureDeployer:
                         Set-MailboxMessageConfiguration `
                             -Identity '{email}' `
                             -SignatureHtml $signatureHtml `
+                            -SignatureText '' `
                             -DefaultFormat Html `
                             -AutoAddSignature $true `
                             -AutoAddSignatureOnReply $true `
@@ -250,6 +253,8 @@ class SignatureDeployer:
                             -Identity $item.email `
                             -SignatureName $signatureName `
                             -SignatureHtmlBody $signatureHtml `
+                            -SignatureHtml $signatureHtml `
+                            -SignatureText '' `
                             -DefaultSignature $signatureName `
                             -DefaultSignatureOnReply $signatureName `
                             -DefaultFormat Html `
@@ -263,6 +268,7 @@ class SignatureDeployer:
                             Set-MailboxMessageConfiguration `
                                 -Identity $item.email `
                                 -SignatureHtml $signatureHtml `
+                                -SignatureText '' `
                                 -DefaultFormat Html `
                                 -AutoAddSignature $true `
                                 -AutoAddSignatureOnReply $true `
