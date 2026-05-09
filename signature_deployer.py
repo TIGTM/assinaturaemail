@@ -561,6 +561,35 @@ class SignatureDeployer:
         """)
         return self._run_ps(script)
 
+    def enable_roaming_signatures(self) -> tuple[bool, str]:
+        """Reativa Roaming Signatures no tenant. Reverte o efeito de
+        Set-OrganizationConfig -PostponeRoamingSignaturesUntilLater $true
+        que a IA anterior aplicou e congelou o sync de assinatura para
+        Outlook novo / OWA / mobile."""
+        ok, msg = self.is_configured()
+        if not ok:
+            return False, msg
+
+        connect_cmd = self._build_connect_command()
+        script = textwrap.dedent(f"""
+            $ErrorActionPreference = 'Stop'
+            $ProgressPreference = 'SilentlyContinue'
+            if ($PSVersionTable.PSVersion.Major -ge 7) {{
+                $PSStyle.OutputRendering = 'PlainText'
+            }}
+            try {{
+                {connect_cmd}
+                Set-OrganizationConfig -PostponeRoamingSignaturesUntilLater $false -ErrorAction SilentlyContinue
+                $cfg = Get-OrganizationConfig | Select-Object PostponeRoamingSignaturesUntilLater
+                Disconnect-ExchangeOnline -Confirm:$false
+                Write-Output ("SUCCESS::Postpone=" + $cfg.PostponeRoamingSignaturesUntilLater)
+            }} catch {{
+                Write-Output ("ERROR::" + $_.Exception.Message)
+                exit 1
+            }}
+        """)
+        return self._run_ps(script)
+
     def clear_mailbox_signatures_batch(self, emails: list[str]) -> list[dict]:
         """Limpa configuração de assinatura de múltiplos usuários em UMA sessão.
 

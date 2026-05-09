@@ -6,30 +6,43 @@
 
 <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--success);">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-    <div>
-      <div style="font-weight:600;font-size:14px;color:var(--text);">⚡ Modo Transport Rule (recomendado)</div>
+    <div style="flex:1;min-width:280px;">
+      <div style="font-weight:600;font-size:14px;color:var(--text);">✅ Roll-out completo (modo mailbox)</div>
       <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-top:4px;">
-        Aplica a assinatura server-side em <strong>uma única regra</strong>. Funciona em OWA,
-        Outlook novo/antigo, mobile. Sem empilhamento em replies (marcador <code>GTM_SIG_v1</code>
-        + header <code>X-GTM-Signature</code>). Não conflita com roaming signatures.
+        Faz tudo em sequência: <strong>(1)</strong> remove a transport rule
+        <strong>(2)</strong> reativa Roaming Signatures no tenant <strong>(3)</strong> aplica a
+        assinatura mailbox em todos. Sync para Outlook desktop / OWA / mobile leva 5–30 min,
+        sem precisar mexer em PC nenhum.
       </div>
     </div>
-    <div style="display:flex;gap:8px;">
-      <form method="POST" action="{{ url_for('deploy_transport_rule') }}" style="margin:0;"
-            onsubmit="return confirm('Aplicar a regra única de transporte agora? Isso afeta TODOS os envios dos domínios @gtmalimentos.com.br e @pescadosbemfresco.com.br.');">
-        <button type="submit" class="btn btn-success">✓ Aplicar regra única</button>
-      </form>
-      <form method="POST" action="{{ url_for('clear_mailbox_all') }}" style="margin:0;"
-            onsubmit="return confirm('Limpar a configuração de assinatura mailbox de TODOS os funcionários?\n\nIsso desativa AutoAddSignature e zera SignatureHtmlBody/Html/Text de cada usuário individualmente. Necessário quando há resíduo do modo antigo causando duplicação (cliente adiciona uma assinatura E a regra adiciona outra).\n\nReversível: rodar deploy mailbox depois traz tudo de volta.');">
-        <button type="submit" class="btn btn-secondary">🧹 Limpar todas mailboxes</button>
-      </form>
-      <form method="POST" action="{{ url_for('remove_transport_rule') }}" style="margin:0;"
-            onsubmit="return confirm('Remover a regra de transporte? Os usuários voltam a depender da configuração de mailbox.');">
-        <button type="submit" class="btn btn-secondary" style="background:var(--danger);color:#fff;">Remover regra</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <form method="POST" action="{{ url_for('full_rollout') }}" style="margin:0;"
+            onsubmit="return confirm('Executar o roll-out completo agora?\n\n1. Remove transport rule\n2. Reativa Roaming Signatures (Postpone=false)\n3. Aplica assinatura mailbox em TODOS os funcionários com imagem gerada\n\nA propagação para Outlook desktop pode levar até 30 min.');">
+        <button type="submit" class="btn btn-success" style="font-weight:600;">🚀 Executar roll-out completo</button>
       </form>
     </div>
   </div>
 </div>
+
+<details class="card" style="padding:10px 16px;margin-bottom:16px;">
+  <summary style="cursor:pointer;font-size:13px;color:var(--text2);">⚙️ Ações avançadas (usar só em troubleshooting)</summary>
+  <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+    <form method="POST" action="{{ url_for('enable_roaming') }}" style="margin:0;">
+      <button type="submit" class="btn btn-secondary">Reativar Roaming Signatures</button>
+    </form>
+    <form method="POST" action="{{ url_for('clear_mailbox_all') }}" style="margin:0;"
+          onsubmit="return confirm('Limpar mailbox de TODOS? Reversível rodando deploy depois.');">
+      <button type="submit" class="btn btn-secondary">🧹 Limpar todas mailboxes</button>
+    </form>
+    <form method="POST" action="{{ url_for('deploy_transport_rule') }}" style="margin:0;"
+          onsubmit="return confirm('Aplicar transport rule? (não recomendado — duplica em replies)');">
+      <button type="submit" class="btn btn-secondary">Aplicar Transport Rule</button>
+    </form>
+    <form method="POST" action="{{ url_for('remove_transport_rule') }}" style="margin:0;">
+      <button type="submit" class="btn btn-secondary">Remover Transport Rule</button>
+    </form>
+  </div>
+</details>
 
 <div style="display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start;">
 

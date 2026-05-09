@@ -369,6 +369,70 @@ def remove_transport_rule():
     return redirect(url_for("deploy"))
 
 
+@app.route("/deploy/full-rollout", methods=["POST"])
+@login_required
+def full_rollout():
+    """Recuperação completa para o modo mailbox (que é o que o usuário quer):
+
+    1. Remove a Transport Rule (se existir, evita duplicação)
+    2. Reativa Roaming Signatures (reverte o congelamento da IA anterior)
+    3. Aplica a assinatura mailbox em todos via deploy_batch
+    """
+    deployer = SignatureDeployer()
+    log = []
+
+    # Passo 1: remover transport rule
+    ok1, msg1 = deployer.remove_transport_rule()
+    log.append(f"1) Transport Rule: {msg1}")
+
+    # Passo 2: reativar roaming
+    ok2, msg2 = deployer.enable_roaming_signatures()
+    log.append(f"2) Roaming Signatures: {msg2}")
+
+    # Passo 3: deploy mailbox em lote
+    emps = db.get_all_employees()
+    vps_url = os.getenv("VPS_BASE_URL", "").rstrip("/")
+    items = []
+    for emp in emps:
+        if not emp.get("img_path"):
+            continue
+        img_url = f"{vps_url}/static/signatures/{emp['img_path']}"
+        items.append({
+            "email": emp["email"],
+            "html":  _build_signature_html(emp, img_url),
+            "_id":   emp["id"],
+        })
+    if not items:
+        log.append("3) Deploy mailbox: nenhum funcionário com imagem gerada")
+        flash(" | ".join(log), "error")
+        return redirect(url_for("deploy"))
+
+    results = deployer.deploy_batch([{"email": i["email"], "html": i["html"]} for i in items])
+    ok_count = 0
+    for r, src in zip(results, items):
+        ok = bool(r.get("ok"))
+        ok_count += 1 if ok else 0
+        db.set_employee_deployed(src["_id"], ok)
+        db.log_deploy(src["_id"], src["email"], "ok" if ok else "error", r.get("msg", ""))
+
+    log.append(f"3) Deploy mailbox: {ok_count}/{len(results)} OK")
+    flash(" | ".join(log), "success" if ok1 and ok2 and ok_count == len(results) else "info")
+    return redirect(url_for("deploy"))
+
+
+@app.route("/deploy/enable-roaming", methods=["POST"])
+@login_required
+def enable_roaming():
+    """Reativa Roaming Signatures no tenant. Útil para reverter o
+    PostponeRoamingSignaturesUntilLater = true aplicado anteriormente."""
+    deployer = SignatureDeployer()
+    ok, msg = deployer.enable_roaming_signatures()
+    db.log_deploy(None, "ENABLE_ROAMING", "ok" if ok else "error", msg)
+    flash(("Roaming reativado: " if ok else "Falha: ") + msg,
+          "success" if ok else "error")
+    return redirect(url_for("deploy"))
+
+
 @app.route("/deploy/clear-mailbox-all", methods=["POST"])
 @login_required
 def clear_mailbox_all():
