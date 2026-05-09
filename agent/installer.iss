@@ -3,7 +3,10 @@
 ;
 ; Comportamento:
 ; - Instala em %LOCALAPPDATA%\GTMSignatureAgent (sem precisar admin)
-; - Cria duas Tarefas Agendadas no contexto do usuario:
+; - Pergunta o e-mail corporativo durante o setup (PCs standalone nao
+;   conseguem detectar sozinhos)
+; - Cria duas Tarefas Agendadas no contexto do usuario, com --email
+;   ja embutido no comando:
 ;     * GTMSignatureSync_Logon  (dispara em todo logon)
 ;     * GTMSignatureSync_Daily  (dispara todo dia as 10:00)
 ; - Roda sync inicial logo apos a instalacao
@@ -44,22 +47,23 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 Source: "GTMSignatureAgent.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{userprograms}\GTM\Sincronizar assinatura agora"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
+Name: "{userprograms}\GTM\Sincronizar assinatura agora"; Filename: "{app}\{#AppExeName}"; Parameters: "--email={code:GetUserEmail}"; WorkingDir: "{app}"
 Name: "{userprograms}\GTM\Desinstalar GTM Signature Agent"; Filename: "{uninstallexe}"
 
 [Run]
-; Cria tarefa agendada que roda em todo logon
+; Cria tarefa que roda em todo logon, com o e-mail embutido
 Filename: "{cmd}"; \
-  Parameters: "/c schtasks /Create /TN ""GTMSignatureSync_Logon"" /TR ""\""{app}\{#AppExeName}\"""" /SC ONLOGON /RL LIMITED /F"; \
+  Parameters: "/c schtasks /Create /TN ""GTMSignatureSync_Logon"" /TR ""\""{app}\{#AppExeName}\"" --email={code:GetUserEmail}"" /SC ONLOGON /RL LIMITED /F"; \
   Flags: runhidden waituntilterminated
 
-; Cria tarefa agendada que roda todo dia as 10:00
+; Cria tarefa que roda todo dia as 10:00, com o e-mail embutido
 Filename: "{cmd}"; \
-  Parameters: "/c schtasks /Create /TN ""GTMSignatureSync_Daily"" /TR ""\""{app}\{#AppExeName}\"""" /SC DAILY /ST 10:00 /RL LIMITED /F"; \
+  Parameters: "/c schtasks /Create /TN ""GTMSignatureSync_Daily"" /TR ""\""{app}\{#AppExeName}\"" --email={code:GetUserEmail}"" /SC DAILY /ST 10:00 /RL LIMITED /F"; \
   Flags: runhidden waituntilterminated
 
-; Sincroniza imediatamente para o usuario nao precisar esperar o proximo logon
+; Sincroniza imediatamente, com o e-mail informado
 Filename: "{app}\{#AppExeName}"; \
+  Parameters: "--email={code:GetUserEmail}"; \
   Description: "Sincronizar assinatura agora"; \
   Flags: postinstall runhidden nowait skipifsilent
 
@@ -76,3 +80,47 @@ Filename: "{cmd}"; \
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{localappdata}\GTMSignatureAgent"
+
+[Code]
+var
+  EmailPage: TInputQueryWizardPage;
+
+procedure InitializeWizard;
+begin
+  EmailPage := CreateInputQueryPage(wpWelcome,
+    'Identificacao do usuario',
+    'Qual o seu e-mail corporativo?',
+    'Digite o e-mail @gtmalimentos.com.br ou @pescadosbemfresco.com.br ' +
+    'que voce usa no Outlook. O agente vai usar esse e-mail para baixar ' +
+    'a sua assinatura da VPS automaticamente.');
+  EmailPage.Add('E-mail:', False);
+end;
+
+function IsValidEmail(email: String): Boolean;
+var
+  e: String;
+begin
+  e := Lowercase(Trim(email));
+  Result := (Pos('@gtmalimentos.com.br', e) > 0) or
+            (Pos('@pescadosbemfresco.com.br', e) > 0);
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if CurPageID = EmailPage.ID then
+  begin
+    if not IsValidEmail(EmailPage.Values[0]) then
+    begin
+      MsgBox('E-mail invalido. Digite um endereco terminado em ' +
+             '@gtmalimentos.com.br ou @pescadosbemfresco.com.br.',
+             mbError, MB_OK);
+      Result := False;
+    end;
+  end;
+end;
+
+function GetUserEmail(Param: String): String;
+begin
+  Result := Lowercase(Trim(EmailPage.Values[0]));
+end;
