@@ -337,6 +337,91 @@ def deploy():
     return render_template("deploy.html", employees=emps, results=results)
 
 
+# ─── API do Agente Windows (cliente local nos PCs dos usuários) ────────────────
+
+def _employee_by_email(email: str):
+    email = (email or "").lower().strip()
+    if not email:
+        return None
+    for emp in db.get_all_employees():
+        if (emp.get("email") or "").lower() == email:
+            return emp
+    return None
+
+
+@app.route("/api/agent/signature")
+def agent_signature():
+    """Retorna a assinatura atual de um e-mail. Consumido pelo agente Windows
+    no PC de cada usuário. O agente baixa a imagem e o HTML e escreve nos
+    arquivos/registry que o Outlook lê."""
+    email = request.args.get("email", "").lower().strip()
+    emp = _employee_by_email(email)
+    if not emp:
+        return jsonify({"error": "employee not found", "email": email}), 404
+    if not emp.get("img_path"):
+        return jsonify({"error": "image not generated", "email": email}), 404
+
+    vps_url = os.getenv("VPS_BASE_URL", "").rstrip("/")
+    img_url = f"{vps_url}/static/signatures/{emp['img_path']}"
+    html = _build_signature_html(emp, img_url)
+
+    import hashlib
+    version = hashlib.sha256(html.encode("utf-8")).hexdigest()[:16]
+
+    return jsonify({
+        "email":     email,
+        "name":      emp.get("name", ""),
+        "html":      html,
+        "image_url": img_url,
+        "version":   version,
+        "sig_name":  os.getenv("EXCHANGE_SIGNATURE_NAME", "GTM Assinatura"),
+    })
+
+
+@app.route("/api/agent/heartbeat", methods=["POST"])
+def agent_heartbeat():
+    """Recebe status de cada PC com o agente instalado. Loga em arquivo
+    pra Phase 2 virar tabela própria."""
+    data = request.get_json(silent=True) or {}
+    log_dir = BASE_DIR / "exports"
+    log_dir.mkdir(exist_ok=True)
+    log_file = log_dir / "agent_heartbeats.jsonl"
+    record = {
+        "ts":                 __import__("datetime").datetime.utcnow().isoformat() + "Z",
+        "email":              data.get("email", ""),
+        "hostname":           data.get("hostname", ""),
+        "os_version":         data.get("os_version", ""),
+        "agent_version":      data.get("agent_version", ""),
+        "signature_version":  data.get("signature_version", ""),
+        "status":             data.get("status", "ok"),
+        "error":              data.get("error", ""),
+    }
+    with open(log_file, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    return jsonify({"ok": True})
+
+
+@app.route("/agents")
+@login_required
+def agents_status():
+    """Painel admin com status dos PCs reportando via agente."""
+    log_file = BASE_DIR / "exports" / "agent_heartbeats.jsonl"
+    by_email = {}
+    if log_file.exists():
+        with open(log_file, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    r = json.loads(line)
+                except Exception:
+                    continue
+                key = (r.get("email", ""), r.get("hostname", ""))
+                # mantém apenas o último heartbeat por (email, hostname)
+                if key not in by_email or r["ts"] > by_email[key]["ts"]:
+                    by_email[key] = r
+    rows = sorted(by_email.values(), key=lambda r: r["ts"], reverse=True)
+    return render_template("agents.html", rows=rows)
+
+
 # ─── Deploy via Transport Rule (server-side) ──────────────────────────────────
 
 @app.route("/deploy/transport-rule", methods=["POST"])

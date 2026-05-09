@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Agentes{% endblock %}
+
+{% block content %}
+<h1 class="page-title">🖥️ Agentes nos PCs</h1>
+
+<div class="card" style="padding:14px 16px;margin-bottom:16px;">
+  <p style="font-size:13px;color:var(--text2);line-height:1.6;margin:0;">
+    Cada PC com o <strong>GTM Signature Agent</strong> instalado reporta status
+    diariamente. O agente roda no logon e às 10h da manhã, baixa a assinatura
+    atual da VPS e escreve nos arquivos / registry que o Outlook lê.
+  </p>
+</div>
+
+<div class="card" style="padding:0;overflow:auto;">
+  <table>
+    <thead>
+      <tr>
+        <th>E-mail</th>
+        <th>Hostname</th>
+        <th>SO</th>
+        <th>Versão agente</th>
+        <th>Versão assinatura</th>
+        <th>Status</th>
+        <th>Último sync (UTC)</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td style="font-size:12px;">{{ r.email }}</td>
+        <td style="font-size:12px;">{{ r.hostname }}</td>
+        <td style="font-size:12px;color:var(--text2);">{{ r.os_version }}</td>
+        <td style="font-size:12px;color:var(--text2);">{{ r.agent_version }}</td>
+        <td style="font-size:11px;color:var(--text2);font-family:monospace;">{{ r.signature_version[:8] }}</td>
+        <td>
+          {% if r.status == 'ok' %}
+            <span class="badge badge-success">✓ OK</span>
+          {% else %}
+            <span class="badge badge-danger" title="{{ r.error }}">✗ {{ r.status }}</span>
+          {% endif %}
+        </td>
+        <td style="font-size:12px;color:var(--text2);">{{ r.ts[:19].replace('T',' ') }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" style="text-align:center;color:var(--text2);padding:30px;">
+        Nenhum agente reportou ainda. Instale o GTM Signature Agent em pelo menos 1 PC.
+      </td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card" style="margin-top:20px;padding:14px 16px;">
+  <div class="card-title">📥 Instalar agente em um PC</div>
+  <p style="font-size:13px;color:var(--text2);line-height:1.7;">
+    1. Baixe o instalador <code>GTMSignatureAgent.msi</code> (Phase 2)<br>
+    2. Execute como Administrador no PC do usuário<br>
+    3. Instalação cria a Tarefa Agendada automaticamente<br>
+    4. Sync inicial roda na hora — assinatura aparece no Outlook após reabrir
+  </p>
+</div>
+{% endblock %}
