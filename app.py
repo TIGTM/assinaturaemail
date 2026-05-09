@@ -337,6 +337,58 @@ def deploy():
     return render_template("deploy.html", employees=emps, results=results)
 
 
+# ─── Deploy via Transport Rule (server-side) ──────────────────────────────────
+
+@app.route("/deploy/transport-rule", methods=["POST"])
+@login_required
+def deploy_transport_rule():
+    """Cria/atualiza a regra única de transporte que injeta a assinatura
+    server-side em todos os envios dos domínios configurados.
+
+    Vantagem: funciona em qualquer cliente (OWA, Outlook novo/antigo, mobile),
+    sem conflito com roaming signatures, sem empilhar em replies (marcador
+    GTM_SIG_v1 no corpo + header X-GTM-Signature).
+    """
+    deployer = SignatureDeployer()
+    ok, msg = deployer.deploy_transport_rule()
+    db.log_deploy(None, "TRANSPORT_RULE", "ok" if ok else "error", msg)
+    flash(("Regra de transporte aplicada: " if ok else "Falha: ") + msg,
+          "success" if ok else "error")
+    return redirect(url_for("deploy"))
+
+
+@app.route("/deploy/remove-rule", methods=["POST"])
+@login_required
+def remove_transport_rule():
+    """Rollback: remove a regra de transporte."""
+    deployer = SignatureDeployer()
+    ok, msg = deployer.remove_transport_rule()
+    db.log_deploy(None, "TRANSPORT_RULE_REMOVE", "ok" if ok else "error", msg)
+    flash(("Regra removida: " if ok else "Falha: ") + msg,
+          "success" if ok else "error")
+    return redirect(url_for("deploy"))
+
+
+@app.route("/deploy/clear-mailbox/<int:emp_id>", methods=["POST"])
+@login_required
+def clear_mailbox_signature(emp_id):
+    """Limpa a configuração de assinatura no nível da mailbox de UM usuário.
+    Útil para remover resíduo do modo mailbox-only quando se opera em
+    modo Transport Rule. Sempre 1 a 1, nunca em lote."""
+    emp = db.get_employee(emp_id)
+    if not emp:
+        return jsonify({"ok": False, "error": "Funcionário não encontrado"})
+    deployer = SignatureDeployer()
+    ok, msg = deployer.clear_mailbox_signature(emp["email"])
+    db.log_deploy(emp_id, emp["email"], "ok" if ok else "error",
+                  ("CLEAR_MAILBOX: " + msg))
+    if request.headers.get("Accept", "").startswith("application/json"):
+        return jsonify({"ok": ok, "msg": msg})
+    flash(("Mailbox limpa: " if ok else "Falha: ") + msg,
+          "success" if ok else "error")
+    return redirect(url_for("deploy"))
+
+
 def _build_signature_html(emp, img_url):
     """Gera o HTML da assinatura com a imagem hospedada na VPS."""
     email = emp.get("email", "")

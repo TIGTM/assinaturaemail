@@ -4,6 +4,29 @@
 {% block content %}
 <h1 class="page-title">🚀 Deploy M365</h1>
 
+<div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--success);">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+    <div>
+      <div style="font-weight:600;font-size:14px;color:var(--text);">⚡ Modo Transport Rule (recomendado)</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-top:4px;">
+        Aplica a assinatura server-side em <strong>uma única regra</strong>. Funciona em OWA,
+        Outlook novo/antigo, mobile. Sem empilhamento em replies (marcador <code>GTM_SIG_v1</code>
+        + header <code>X-GTM-Signature</code>). Não conflita com roaming signatures.
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <form method="POST" action="{{ url_for('deploy_transport_rule') }}" style="margin:0;"
+            onsubmit="return confirm('Aplicar a regra única de transporte agora? Isso afeta TODOS os envios dos domínios @gtmalimentos.com.br e @pescadosbemfresco.com.br.');">
+        <button type="submit" class="btn btn-success">✓ Aplicar regra única</button>
+      </form>
+      <form method="POST" action="{{ url_for('remove_transport_rule') }}" style="margin:0;"
+            onsubmit="return confirm('Remover a regra de transporte? Os usuários voltam a depender da configuração de mailbox.');">
+        <button type="submit" class="btn btn-secondary" style="background:var(--danger);color:#fff;">Remover regra</button>
+      </form>
+    </div>
+  </div>
+</div>
+
 <div style="display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start;">
 
   <div>
@@ -37,6 +60,7 @@
               <th>E-mail</th>
               <th>Imagem</th>
               <th>Deploy anterior</th>
+              <th style="width:130px;">Limpar mailbox</th>
             </tr>
           </thead>
           <tbody>
@@ -61,6 +85,14 @@
                 {% else %}
                   <span class="badge badge-info">—</span>
                 {% endif %}
+              </td>
+              <td>
+                <button type="button" class="btn btn-secondary"
+                        style="font-size:11px;padding:4px 8px;"
+                        onclick="clearMailbox(this, {{ emp.id }}, '{{ emp.email }}')">
+                  🧹 Limpar
+                </button>
+                <span class="clear-status" style="font-size:11px;margin-left:6px;"></span>
               </td>
             </tr>
           {% endfor %}
@@ -146,6 +178,33 @@
 
 {% block scripts %}
 <script>
+function clearMailbox(btn, empId, email) {
+  if (!confirm("Limpar a configuração de assinatura da mailbox de " + email + "?\n\n" +
+               "Use isso quando o usuário tem resíduo do modo antigo conflitando com a Transport Rule. " +
+               "É feito 1 a 1, nunca em lote."))
+    return;
+  const status = btn.parentElement.querySelector(".clear-status");
+  btn.disabled = true;
+  status.textContent = "…";
+  status.style.color = "var(--text2)";
+  fetch("/deploy/clear-mailbox/" + empId, {
+    method: "POST",
+    headers: {"Accept": "application/json"}
+  })
+  .then(r => r.json())
+  .then(d => {
+    btn.disabled = false;
+    status.textContent = d.ok ? "✓" : "✗";
+    status.style.color = d.ok ? "var(--success)" : "var(--danger)";
+    status.title = d.msg || "";
+  })
+  .catch(e => {
+    btn.disabled = false;
+    status.textContent = "✗";
+    status.style.color = "var(--danger)";
+    status.title = String(e);
+  });
+}
 function toggleAll(cb) {
   document.querySelectorAll(".emp-check:not(:disabled)").forEach(c => c.checked = cb.checked);
 }

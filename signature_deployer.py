@@ -372,6 +372,195 @@ class SignatureDeployer:
         """)
         return self._run_ps(script)
 
+    # ─── Transport Rule (server-side disclaimer) ──────────────────────────────
+
+    SIGNATURE_MARKER = "GTM_SIG_v1"
+    DEFAULT_RULE_NAME = "GTM-Signature-Auto"
+    DEFAULT_DOMAINS = ("gtmalimentos.com.br", "pescadosbemfresco.com.br")
+
+    def _build_disclaimer_html(self, image_base_url: str) -> str:
+        """HTML do disclaimer injetado pela Transport Rule.
+
+        Usa %%WindowsEmailAddress%% (substituído pelo Exchange pelo email do remetente)
+        e inclui o marcador GTM_SIG_v1 que impede o disparo da regra em replies/forwards
+        (já que o corpo citado da mensagem original conterá o marcador).
+        """
+        base = image_base_url.rstrip("/")
+        return (
+            f"<br><!-- {self.SIGNATURE_MARKER} -->"
+            f"<table role='presentation' cellpadding='0' cellspacing='0' border='0' "
+            f"style='border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;'>"
+            f"<tr><td style='padding:10px 0 2px 0;'>"
+            f"<a href='mailto:%%WindowsEmailAddress%%' style='border:none;text-decoration:none;'>"
+            f"<img src='{base}/sig/%%WindowsEmailAddress%%' alt='Assinatura' width='600' "
+            f"style='display:block;width:600px;max-width:100%;height:auto;border:0;"
+            f"outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;' />"
+            f"</a></td></tr></table>"
+        )
+
+    def deploy_transport_rule(
+        self,
+        rule_name: str | None = None,
+        domains: list[str] | None = None,
+        image_base_url: str | None = None,
+    ) -> tuple[bool, str]:
+        """Cria/atualiza uma única regra de transporte que injeta a assinatura
+        server-side em todo envio dos domínios configurados.
+
+        Anti-duplicação em replies/forwards: a regra ignora mensagens cujo corpo
+        já contenha o marcador GTM_SIG_v1 OU que tenham o header X-GTM-Signature.
+        """
+        ok, msg = self.is_configured()
+        if not ok:
+            return False, msg
+
+        rule_name = rule_name or self.DEFAULT_RULE_NAME
+        domains = list(domains) if domains else list(self.DEFAULT_DOMAINS)
+        image_base_url = (image_base_url or os.getenv("VPS_BASE_URL", "")).strip()
+        if not image_base_url:
+            return False, "VPS_BASE_URL não configurado no .env"
+
+        disclaimer = self._build_disclaimer_html(image_base_url)
+
+        safe_rule = rule_name.replace("'", "''")
+        safe_disclaimer = disclaimer.replace("'", "''")
+        safe_marker = self.SIGNATURE_MARKER.replace("'", "''")
+        domain_list = ",".join("'" + d.replace("'", "''") + "'" for d in domains)
+
+        connect_cmd = self._build_connect_command()
+
+        script = textwrap.dedent(f"""
+            $ErrorActionPreference = 'Stop'
+            $ProgressPreference = 'SilentlyContinue'
+            if ($PSVersionTable.PSVersion.Major -ge 7) {{
+                $PSStyle.OutputRendering = 'PlainText'
+            }}
+            try {{
+                {connect_cmd}
+
+                $ruleName    = '{safe_rule}'
+                $disclaimer  = '{safe_disclaimer}'
+                $marker      = '{safe_marker}'
+                $domains     = @({domain_list})
+
+                $params = @{{
+                    FromScope                          = 'InOrganization'
+                    SenderDomainIs                     = $domains
+                    ApplyHtmlDisclaimerText            = $disclaimer
+                    ApplyHtmlDisclaimerLocation        = 'Append'
+                    ApplyHtmlDisclaimerFallbackAction  = 'Wrap'
+                    ExceptIfSubjectOrBodyMatchesPatterns = @($marker)
+                    ExceptIfHeaderMatchesMessageHeader = 'X-GTM-Signature'
+                    ExceptIfHeaderMatchesPatterns      = @('applied')
+                    SetHeaderName                      = 'X-GTM-Signature'
+                    SetHeaderValue                     = 'applied'
+                    Mode                               = 'Enforce'
+                    Priority                           = 0
+                }}
+
+                $existing = Get-TransportRule -Identity $ruleName -ErrorAction SilentlyContinue
+                if ($existing) {{
+                    Set-TransportRule -Identity $ruleName @params -ErrorAction Stop
+                    $action = 'UPDATED'
+                }} else {{
+                    New-TransportRule -Name $ruleName @params -ErrorAction Stop
+                    $action = 'CREATED'
+                }}
+
+                # Garante regra habilitada
+                Enable-TransportRule -Identity $ruleName -Confirm:$false -ErrorAction SilentlyContinue
+
+                # Desabilita regras antigas de disclaimer com %%WindowsEmailAddress%% que não sejam a nossa
+                Get-TransportRule |
+                    Where-Object {{
+                        $_.Name -ne $ruleName -and
+                        $_.ApplyHtmlDisclaimerText -like '*%%WindowsEmailAddress%%*'
+                    }} |
+                    ForEach-Object {{
+                        Disable-TransportRule -Identity $_.Name -Confirm:$false -ErrorAction SilentlyContinue
+                    }}
+
+                Disconnect-ExchangeOnline -Confirm:$false
+                Write-Output ("SUCCESS::" + $action + " " + $ruleName)
+            }} catch {{
+                Write-Output ("ERROR::" + $_.Exception.Message)
+                exit 1
+            }}
+        """)
+        return self._run_ps(script)
+
+    def remove_transport_rule(self, rule_name: str | None = None) -> tuple[bool, str]:
+        """Remove a regra de transporte (rollback)."""
+        ok, msg = self.is_configured()
+        if not ok:
+            return False, msg
+
+        rule_name = rule_name or self.DEFAULT_RULE_NAME
+        safe_rule = rule_name.replace("'", "''")
+        connect_cmd = self._build_connect_command()
+
+        script = textwrap.dedent(f"""
+            $ErrorActionPreference = 'Stop'
+            $ProgressPreference = 'SilentlyContinue'
+            if ($PSVersionTable.PSVersion.Major -ge 7) {{
+                $PSStyle.OutputRendering = 'PlainText'
+            }}
+            try {{
+                {connect_cmd}
+                $ruleName = '{safe_rule}'
+                $existing = Get-TransportRule -Identity $ruleName -ErrorAction SilentlyContinue
+                if ($existing) {{
+                    Remove-TransportRule -Identity $ruleName -Confirm:$false -ErrorAction Stop
+                    Write-Output ("SUCCESS::REMOVED " + $ruleName)
+                }} else {{
+                    Write-Output ("SUCCESS::NOT_FOUND " + $ruleName)
+                }}
+                Disconnect-ExchangeOnline -Confirm:$false
+            }} catch {{
+                Write-Output ("ERROR::" + $_.Exception.Message)
+                exit 1
+            }}
+        """)
+        return self._run_ps(script)
+
+    def clear_mailbox_signature(self, email: str) -> tuple[bool, str]:
+        """Limpa configuração de assinatura no nível da mailbox de UM usuário.
+
+        Use em modo Transport Rule para garantir que somente a regra controla
+        a assinatura, sem conflito com configurações antigas (resíduo do modo
+        mailbox-only que ficou inconsistente em alguns usuários).
+        """
+        ok, msg = self.is_configured()
+        if not ok:
+            return False, msg
+
+        safe_email = email.replace("'", "''")
+        connect_cmd = self._build_connect_command()
+
+        script = textwrap.dedent(f"""
+            $ErrorActionPreference = 'Stop'
+            $ProgressPreference = 'SilentlyContinue'
+            if ($PSVersionTable.PSVersion.Major -ge 7) {{
+                $PSStyle.OutputRendering = 'PlainText'
+            }}
+            try {{
+                {connect_cmd}
+                Set-MailboxMessageConfiguration -Identity '{safe_email}' `
+                    -SignatureHtmlBody '' `
+                    -SignatureHtml '' `
+                    -SignatureText '' `
+                    -AutoAddSignature $false `
+                    -AutoAddSignatureOnReply $false `
+                    -ErrorAction Stop
+                Disconnect-ExchangeOnline -Confirm:$false
+                Write-Output "SUCCESS"
+            }} catch {{
+                Write-Output ("ERROR::" + $_.Exception.Message)
+                exit 1
+            }}
+        """)
+        return self._run_ps(script)
+
     @staticmethod
     def install_module_script() -> str:
         """Retorna o script PowerShell para instalar o módulo ExchangeOnlineManagement."""
