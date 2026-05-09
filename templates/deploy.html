@@ -10,9 +10,9 @@
       <div style="font-weight:600;font-size:14px;color:var(--text);">✅ Roll-out completo (modo mailbox)</div>
       <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-top:4px;">
         Faz tudo em sequência: <strong>(1)</strong> remove a transport rule
-        <strong>(2)</strong> reativa Roaming Signatures no tenant <strong>(3)</strong> aplica a
-        assinatura mailbox em todos. Sync para Outlook desktop / OWA / mobile leva 5–30 min,
-        sem precisar mexer em PC nenhum.
+        <strong>(2)</strong> força modo legado (<code>PostponeRoamingSignaturesUntilLater=true</code>),
+        que faz o novo Outlook ler a config mailbox <strong>(3)</strong> aplica a assinatura
+        mailbox em todos. Sync para Outlook desktop / OWA / mobile leva 5–30 min, sem mexer em PC.
       </div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -27,8 +27,8 @@
 <details class="card" style="padding:10px 16px;margin-bottom:16px;">
   <summary style="cursor:pointer;font-size:13px;color:var(--text2);">⚙️ Ações avançadas (usar só em troubleshooting)</summary>
   <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-    <form method="POST" action="{{ url_for('enable_roaming') }}" style="margin:0;">
-      <button type="submit" class="btn btn-secondary">Reativar Roaming Signatures</button>
+    <form method="POST" action="{{ url_for('force_legacy') }}" style="margin:0;">
+      <button type="submit" class="btn btn-secondary">Forçar modo legado (Postpone=true)</button>
     </form>
     <form method="POST" action="{{ url_for('clear_mailbox_all') }}" style="margin:0;"
           onsubmit="return confirm('Limpar mailbox de TODOS? Reversível rodando deploy depois.');">

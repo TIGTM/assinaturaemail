@@ -385,9 +385,9 @@ def full_rollout():
     ok1, msg1 = deployer.remove_transport_rule()
     log.append(f"1) Transport Rule: {msg1}")
 
-    # Passo 2: reativar roaming
-    ok2, msg2 = deployer.enable_roaming_signatures()
-    log.append(f"2) Roaming Signatures: {msg2}")
+    # Passo 2: forçar modo legado (novo Outlook lê config mailbox)
+    ok2, msg2 = deployer.force_legacy_signature_mode()
+    log.append(f"2) Modo legado: {msg2}")
 
     # Passo 3: deploy mailbox em lote
     emps = db.get_all_employees()
@@ -420,15 +420,16 @@ def full_rollout():
     return redirect(url_for("deploy"))
 
 
-@app.route("/deploy/enable-roaming", methods=["POST"])
+@app.route("/deploy/force-legacy", methods=["POST"])
 @login_required
-def enable_roaming():
-    """Reativa Roaming Signatures no tenant. Útil para reverter o
-    PostponeRoamingSignaturesUntilLater = true aplicado anteriormente."""
+def force_legacy():
+    """Força o novo Outlook / OWA a ler assinatura da config legada
+    (Set-PostponeRoamingSignaturesUntilLater = true). Esse é o estado
+    que faz o deploy mailbox aparecer no editor do novo Outlook."""
     deployer = SignatureDeployer()
-    ok, msg = deployer.enable_roaming_signatures()
-    db.log_deploy(None, "ENABLE_ROAMING", "ok" if ok else "error", msg)
-    flash(("Roaming reativado: " if ok else "Falha: ") + msg,
+    ok, msg = deployer.force_legacy_signature_mode()
+    db.log_deploy(None, "FORCE_LEGACY", "ok" if ok else "error", msg)
+    flash(("Modo legado ativado: " if ok else "Falha: ") + msg,
           "success" if ok else "error")
     return redirect(url_for("deploy"))
 

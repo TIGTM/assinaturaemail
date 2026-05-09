@@ -561,11 +561,17 @@ class SignatureDeployer:
         """)
         return self._run_ps(script)
 
-    def enable_roaming_signatures(self) -> tuple[bool, str]:
-        """Reativa Roaming Signatures no tenant. Reverte o efeito de
-        Set-OrganizationConfig -PostponeRoamingSignaturesUntilLater $true
-        que a IA anterior aplicou e congelou o sync de assinatura para
-        Outlook novo / OWA / mobile."""
+    def force_legacy_signature_mode(self) -> tuple[bool, str]:
+        """Define PostponeRoamingSignaturesUntilLater = $true no tenant.
+
+        Isso força o novo Outlook / OWA a ler assinatura da config LEGADA
+        (Set-MailboxMessageConfiguration) em vez do Roaming Signatures store.
+        É o que faz a assinatura escrita pelo deploy mailbox aparecer no
+        editor do novo Outlook e ser usada em novos e-mails / replies.
+
+        Não é destrutivo: só muda a fonte da assinatura para o cliente novo.
+        O comando que a IA anterior usou e quebrou foi DeleteSignatureName
+        (que a gente nunca chama)."""
         ok, msg = self.is_configured()
         if not ok:
             return False, msg
@@ -579,7 +585,7 @@ class SignatureDeployer:
             }}
             try {{
                 {connect_cmd}
-                Set-OrganizationConfig -PostponeRoamingSignaturesUntilLater $false -ErrorAction SilentlyContinue
+                Set-OrganizationConfig -PostponeRoamingSignaturesUntilLater $true -ErrorAction SilentlyContinue
                 $cfg = Get-OrganizationConfig | Select-Object PostponeRoamingSignaturesUntilLater
                 Disconnect-ExchangeOnline -Confirm:$false
                 Write-Output ("SUCCESS::Postpone=" + $cfg.PostponeRoamingSignaturesUntilLater)
