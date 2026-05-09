@@ -119,7 +119,32 @@ def _walk_profile_for_email(winreg, profiles_key, profile_name, out):
             continue
 
 
+def detect_email_from_args():
+    """Permite passar o e-mail por argumento (útil em teste e no MSI installer
+    que passa o e-mail no agendamento da tarefa)."""
+    for i, arg in enumerate(sys.argv[1:]):
+        if arg.startswith("--email="):
+            return arg.split("=", 1)[1].strip().lower()
+        if arg == "--email" and i + 2 <= len(sys.argv):
+            return sys.argv[i + 2].strip().lower()
+    return None
+
+
+def detect_email_from_explicit_env():
+    """Variável dedicada que o instalador MSI vai setar."""
+    v = os.environ.get("GTM_USER_EMAIL", "").strip().lower()
+    return v if v else None
+
+
 def detect_email():
+    email = detect_email_from_args()
+    if email:
+        log.info("e-mail recebido por argumento: %s", email)
+        return email
+    email = detect_email_from_explicit_env()
+    if email:
+        log.info("e-mail via GTM_USER_EMAIL: %s", email)
+        return email
     email = detect_email_from_env()
     if email:
         log.info("e-mail detectado via env: %s", email)
