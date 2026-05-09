@@ -33,11 +33,25 @@ jobs:
             --distpath ../dist `
             gtm_signature_agent.py
 
-      - name: Upload artifact (always available from Actions tab)
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Stage exe for installer
+        run: Copy-Item dist/GTMSignatureAgent.exe agent/
+
+      - name: Build per-user installer
+        working-directory: agent
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+          Move-Item Output/GTMSignatureAgentSetup.exe ../dist/
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: GTMSignatureAgent
-          path: dist/GTMSignatureAgent.exe
+          path: |
+            dist/GTMSignatureAgent.exe
+            dist/GTMSignatureAgentSetup.exe
           retention-days: 90
 
       - name: Publish to "agent-latest" release
@@ -47,8 +61,15 @@ jobs:
           name: GTM Signature Agent (latest)
           body: |
             Build automatico do agente Windows.
+
+            Arquivos:
+            - **GTMSignatureAgentSetup.exe** — instalador per-user (recomendado, distribua este pros usuarios)
+            - **GTMSignatureAgent.exe** — executavel standalone (so pra teste manual / debug)
+
             Commit: ${{ github.sha }}
             Run: ${{ github.run_number }}
-          files: dist/GTMSignatureAgent.exe
+          files: |
+            dist/GTMSignatureAgent.exe
+            dist/GTMSignatureAgentSetup.exe
           prerelease: true
           make_latest: false

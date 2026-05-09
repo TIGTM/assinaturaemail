@@ -54,10 +54,26 @@
 <div class="card" style="margin-top:20px;padding:14px 16px;">
   <div class="card-title">📥 Instalar agente em um PC</div>
   <p style="font-size:13px;color:var(--text2);line-height:1.7;">
-    1. Baixe o instalador <code>GTMSignatureAgent.msi</code> (Phase 2)<br>
-    2. Execute como Administrador no PC do usuário<br>
-    3. Instalação cria a Tarefa Agendada automaticamente<br>
-    4. Sync inicial roda na hora — assinatura aparece no Outlook após reabrir
+    <strong>Per-user, sem precisar de senha de admin.</strong> Mande o link
+    abaixo pro usuário, ele baixa, dois cliques, pronto.
+  </p>
+  <p style="margin-top:10px;">
+    <a href="https://github.com/TIGTM/assinaturaemail/releases/download/agent-latest/GTMSignatureAgentSetup.exe"
+       class="btn btn-success" target="_blank">
+      ⬇ Baixar GTMSignatureAgentSetup.exe
+    </a>
+  </p>
+  <ol style="font-size:13px;color:var(--text2);line-height:1.8;margin-top:12px;padding-left:20px;">
+    <li>Baixar o instalador no PC do usuário</li>
+    <li>Duplo-clique → "Avançar" até o final (<em>se aparecer aviso do SmartScreen, clicar "Mais informações" → "Executar assim mesmo"</em>)</li>
+    <li>Instalador cria 2 Tarefas Agendadas (logon + 10h diariamente)</li>
+    <li>Sync inicial roda imediatamente — assinatura disponível no Outlook</li>
+  </ol>
+  <p style="font-size:12px;color:var(--text2);margin-top:10px;">
+    Detecção de e-mail: o agente roda <code>whoami /upn</code>. Funciona em PCs
+    Azure AD-joined ou em domínio AD. Em PCs standalone, instalar com:
+    <code>GTMSignatureAgentSetup.exe /SILENT</code> + agendar manualmente
+    com <code>--email=usuario@dominio</code>.
   </p>
 </div>
 {% endblock %}

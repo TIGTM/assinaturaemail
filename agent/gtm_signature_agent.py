@@ -25,7 +25,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-AGENT_VERSION = "0.1.0"
+AGENT_VERSION = "0.2.0"
 VPS_BASE = os.environ.get("GTM_VPS_BASE", "https://assinatura.gtmalimentos.com.br")
 DOMAINS = ("@gtmalimentos.com.br", "@pescadosbemfresco.com.br")
 SIG_NAME = "GTM Assinatura"
@@ -130,6 +130,23 @@ def detect_email_from_args():
     return None
 
 
+def detect_email_from_whoami():
+    """`whoami /upn` retorna o User Principal Name em PCs Azure AD-joined
+    ou domain-joined — tipicamente já é o e-mail corporativo."""
+    try:
+        import subprocess
+        r = subprocess.run(
+            ["whoami", "/upn"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+        v = (r.stdout or "").strip().lower()
+        if v and any(d in v for d in DOMAINS):
+            return v
+    except Exception as e:
+        log.debug("whoami /upn falhou: %s", e)
+    return None
+
+
 def detect_email_from_explicit_env():
     """Variável dedicada que o instalador MSI vai setar."""
     v = os.environ.get("GTM_USER_EMAIL", "").strip().lower()
@@ -144,6 +161,10 @@ def detect_email():
     email = detect_email_from_explicit_env()
     if email:
         log.info("e-mail via GTM_USER_EMAIL: %s", email)
+        return email
+    email = detect_email_from_whoami()
+    if email:
+        log.info("e-mail via whoami /upn: %s", email)
         return email
     email = detect_email_from_env()
     if email:
