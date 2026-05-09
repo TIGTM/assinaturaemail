@@ -1,0 +1,54 @@
+name: Build GTM Signature Agent
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'agent/**'
+      - '.github/workflows/build-agent.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build standalone exe
+        working-directory: agent
+        run: |
+          pyinstaller --onefile --noconsole `
+            --name GTMSignatureAgent `
+            --distpath ../dist `
+            gtm_signature_agent.py
+
+      - name: Upload artifact (always available from Actions tab)
+        uses: actions/upload-artifact@v4
+        with:
+          name: GTMSignatureAgent
+          path: dist/GTMSignatureAgent.exe
+          retention-days: 90
+
+      - name: Publish to "agent-latest" release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: agent-latest
+          name: GTM Signature Agent (latest)
+          body: |
+            Build automatico do agente Windows.
+            Commit: ${{ github.sha }}
+            Run: ${{ github.run_number }}
+          files: dist/GTMSignatureAgent.exe
+          prerelease: true
+          make_latest: false
